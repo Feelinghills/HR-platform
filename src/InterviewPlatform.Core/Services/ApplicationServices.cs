@@ -1,0 +1,789 @@
+using System.Text.Json;
+using InterviewPlatform.Domain.Models;
+
+namespace InterviewPlatform.Core.Services;
+
+public sealed class AuditService(IUnitOfWork unitOfWork) : IAuditService
+{
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    public async Task LogAsync(
+        string entityType,
+        Guid entityId,
+        string action,
+        object? oldValues,
+        object? newValues,
+        Guid? performedById,
+        CancellationToken cancellationToken = default)
+    {
+        await unitOfWork.AuditLogs.AddAsync(new AuditLog
+        {
+            EntityType = entityType,
+            EntityId = entityId,
+            Action = action,
+            OldValues = oldValues is null ? null : JsonSerializer.Serialize(oldValues, JsonOptions),
+            NewValues = newValues is null ? null : JsonSerializer.Serialize(newValues, JsonOptions),
+            PerformedById = performedById,
+            PerformedAt = DateTime.UtcNow
+        }, cancellationToken);
+    }
+}
+
+public sealed class AuthService(
+    IUnitOfWork unitOfWork,
+    IPasswordHasher passwordHasher,
+    IJwtTokenService jwtTokenService,
+    IAuditService auditService) : IAuthService
+{
+    public Task<AuthResponse> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default)
+    {
+        var email = NormalizeEmail(request.Email);
+        var user = unitOfWork.Users.Query().FirstOrDefault(x => x.Email.ToLower() == email && x.IsActive);
+
+        if (user is null || !passwordHasher.Verify(request.Password, user.PasswordHash))
+        {
+            throw new BusinessException("Неверный email или пароль.");
+        }
+
+        return Task.FromResult(new AuthResponse(jwtTokenService.Generate(user), Map(user)));
+    }
+
+    public async Task<UserDto> CreateUserAsync(RegisterUserRequest request, Guid? performedById, CancellationToken cancellationToken = default)
+    {
+        var email = NormalizeEmail(request.Email);
+
+        if (unitOfWork.Users.Query().Any(x => x.Email.ToLower() == email))
+        {
+            throw new BusinessException("Пользователь с таким email уже существует.");
+        }
+
+        var user = new User
+        {
+            Email = email,
+            FullName = request.FullName.Trim(),
+            PasswordHash = passwordHasher.Hash(request.Password),
+            Role = request.Role
+        };
+
+        await unitOfWork.Users.AddAsync(user, cancellationToken);
+        await auditService.LogAsync("User", user.Id, "Create", null, new { user.Email, user.FullName, user.Role }, performedById, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return Map(user);
+    }
+
+    public Task<IReadOnlyList<UserDto>> ListUsersAsync(CancellationToken cancellationToken = default)
+    {
+        var users = unitOfWork.Users.Query()
+            .OrderBy(x => x.FullName)
+            .Select(x => Map(x))
+            .ToList();
+
+        return Task.FromResult<IReadOnlyList<UserDto>>(users);
+    }
+
+    public async Task<UserDto> SetUserStatusAsync(Guid id, bool isActive, Guid? performedById, CancellationToken cancellationToken = default)
+    {
+        var user = await unitOfWork.Users.GetByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException("Пользователь не найден.");
+
+        var oldValues = new { user.IsActive };
+        user.IsActive = isActive;
+
+        unitOfWork.Users.Update(user);
+        await auditService.LogAsync("User", id, "SetStatus", oldValues, new { user.IsActive }, performedById, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return Map(user);
+    }
+
+    private static string NormalizeEmail(string email) => email.Trim().ToLowerInvariant();
+
+    private static UserDto Map(User user) => new(
+        user.Id,
+        user.Email,
+        user.FullName,
+        user.Role,
+        user.IsActive,
+        user.CreatedAt);
+}
+
+public sealed class CandidateService(IUnitOfWork unitOfWork, IAuditService auditService) : ICandidateService
+{
+    public Task<IReadOnlyList<CandidateDto>> ListAsync(string? search, bool includeArchived, CancellationToken cancellationToken = default)
+    {
+        var query = unitOfWork.Candidates.Query();
+
+        if (!includeArchived)
+        {
+            query = query.Where(x => !x.IsArchived);
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLowerInvariant();
+            query = query.Where(x =>
+                x.FullName.ToLower().Contains(term)
+                || x.Phone.ToLower().Contains(term)
+                || (x.Email != null && x.Email.ToLower().Contains(term))
+                || x.City.ToLower().Contains(term)
+                || x.DesiredPosition.ToLower().Contains(term));
+        }
+
+        var candidates = query
+            .OrderByDescending(x => x.CreatedAt)
+            .Select(x => Map(x))
+            .ToList();
+
+        return Task.FromResult<IReadOnlyList<CandidateDto>>(candidates);
+    }
+
+    public Task<CandidateDto> GetAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var candidate = unitOfWork.Candidates.Query()
+            .Where(x => x.Id == id)
+            .Select(x => Map(x))
+            .FirstOrDefault()
+            ?? throw new NotFoundException("Кандидат не найден.");
+
+        return Task.FromResult(candidate);
+    }
+
+    public async Task<CandidateDto> CreateAsync(CreateCandidateRequest request, Guid? createdById, CancellationToken cancellationToken = default)
+    {
+        var candidate = new Candidate
+        {
+            FullName = request.FullName.Trim(),
+            Phone = request.Phone.Trim(),
+            Email = string.IsNullOrWhiteSpace(request.Email) ? null : request.Email.Trim().ToLowerInvariant(),
+            City = request.City.Trim(),
+            DesiredPosition = request.DesiredPosition.Trim(),
+            Education = request.Education.Trim(),
+            PreviousJob = request.PreviousJob.Trim(),
+            Skills = request.Skills.Trim(),
+            CreatedById = createdById
+        };
+
+        await unitOfWork.Candidates.AddAsync(candidate, cancellationToken);
+        await auditService.LogAsync("Candidate", candidate.Id, "Create", null, Map(candidate), createdById, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return Map(candidate);
+    }
+
+    public async Task<CandidateDto> UpdateAsync(Guid id, UpdateCandidateRequest request, Guid? performedById, CancellationToken cancellationToken = default)
+    {
+        var candidate = await unitOfWork.Candidates.GetByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException("Кандидат не найден.");
+
+        var oldValues = Map(candidate);
+
+        candidate.FullName = request.FullName.Trim();
+        candidate.Phone = request.Phone.Trim();
+        candidate.Email = string.IsNullOrWhiteSpace(request.Email) ? null : request.Email.Trim().ToLowerInvariant();
+        candidate.City = request.City.Trim();
+        candidate.DesiredPosition = request.DesiredPosition.Trim();
+        candidate.Education = request.Education.Trim();
+        candidate.PreviousJob = request.PreviousJob.Trim();
+        candidate.Skills = request.Skills.Trim();
+        candidate.IsArchived = request.IsArchived;
+
+        unitOfWork.Candidates.Update(candidate);
+        await auditService.LogAsync("Candidate", id, "Update", oldValues, Map(candidate), performedById, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return Map(candidate);
+    }
+
+    public async Task ArchiveAsync(Guid id, Guid? performedById, CancellationToken cancellationToken = default)
+    {
+        var candidate = await unitOfWork.Candidates.GetByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException("Кандидат не найден.");
+
+        candidate.IsArchived = true;
+        unitOfWork.Candidates.Update(candidate);
+        await auditService.LogAsync("Candidate", id, "Archive", null, new { candidate.IsArchived }, performedById, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    private static CandidateDto Map(Candidate candidate) => new(
+        candidate.Id,
+        candidate.FullName,
+        candidate.Phone,
+        candidate.Email,
+        candidate.City,
+        candidate.DesiredPosition,
+        candidate.Education,
+        candidate.PreviousJob,
+        candidate.Skills,
+        candidate.IsArchived,
+        candidate.CreatedById,
+        candidate.CreatedAt);
+}
+
+public sealed class VacancyService(IUnitOfWork unitOfWork, IAuditService auditService) : IVacancyService
+{
+    public Task<IReadOnlyList<VacancyDto>> ListAsync(bool activeOnly, CancellationToken cancellationToken = default)
+    {
+        var query = unitOfWork.Vacancies.Query();
+
+        if (activeOnly)
+        {
+            query = query.Where(x => x.IsActive);
+        }
+
+        var vacancies = query
+            .OrderBy(x => x.Title)
+            .Select(x => Map(x))
+            .ToList();
+
+        return Task.FromResult<IReadOnlyList<VacancyDto>>(vacancies);
+    }
+
+    public Task<VacancyDto> GetAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var vacancy = unitOfWork.Vacancies.Query()
+            .Where(x => x.Id == id)
+            .Select(x => Map(x))
+            .FirstOrDefault()
+            ?? throw new NotFoundException("Вакансия не найдена.");
+
+        return Task.FromResult(vacancy);
+    }
+
+    public async Task<VacancyDto> CreateAsync(CreateVacancyRequest request, Guid? performedById, CancellationToken cancellationToken = default)
+    {
+        var vacancy = new Vacancy
+        {
+            Title = request.Title.Trim(),
+            Description = request.Description.Trim(),
+            Requirements = request.Requirements.Trim(),
+            IsActive = request.IsActive
+        };
+
+        await unitOfWork.Vacancies.AddAsync(vacancy, cancellationToken);
+        await auditService.LogAsync("Vacancy", vacancy.Id, "Create", null, Map(vacancy), performedById, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return Map(vacancy);
+    }
+
+    public async Task<VacancyDto> UpdateAsync(Guid id, UpdateVacancyRequest request, Guid? performedById, CancellationToken cancellationToken = default)
+    {
+        var vacancy = await unitOfWork.Vacancies.GetByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException("Вакансия не найдена.");
+
+        var oldValues = Map(vacancy);
+
+        vacancy.Title = request.Title.Trim();
+        vacancy.Description = request.Description.Trim();
+        vacancy.Requirements = request.Requirements.Trim();
+        vacancy.IsActive = request.IsActive;
+
+        unitOfWork.Vacancies.Update(vacancy);
+        await auditService.LogAsync("Vacancy", id, "Update", oldValues, Map(vacancy), performedById, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return Map(vacancy);
+    }
+
+    private static VacancyDto Map(Vacancy vacancy) => new(
+        vacancy.Id,
+        vacancy.Title,
+        vacancy.Description,
+        vacancy.Requirements,
+        vacancy.IsActive,
+        vacancy.CreatedAt);
+}
+
+public sealed class CompetencyService(IUnitOfWork unitOfWork, IAuditService auditService) : ICompetencyService
+{
+    public Task<IReadOnlyList<CompetencyDto>> ListAsync(bool activeOnly, CancellationToken cancellationToken = default)
+    {
+        var query = unitOfWork.Competencies.Query();
+
+        if (activeOnly)
+        {
+            query = query.Where(x => x.IsActive);
+        }
+
+        var competencies = query
+            .OrderBy(x => x.Category)
+            .ThenBy(x => x.Name)
+            .Select(x => Map(x))
+            .ToList();
+
+        return Task.FromResult<IReadOnlyList<CompetencyDto>>(competencies);
+    }
+
+    public Task<CompetencyDto> GetAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var competency = unitOfWork.Competencies.Query()
+            .Where(x => x.Id == id)
+            .Select(x => Map(x))
+            .FirstOrDefault()
+            ?? throw new NotFoundException("Компетенция не найдена.");
+
+        return Task.FromResult(competency);
+    }
+
+    public async Task<CompetencyDto> CreateAsync(CreateCompetencyRequest request, Guid? performedById, CancellationToken cancellationToken = default)
+    {
+        EnsureValidScore(request.MaxScore);
+
+        var competency = new Competency
+        {
+            Name = request.Name.Trim(),
+            Description = request.Description.Trim(),
+            Category = request.Category.Trim(),
+            MaxScore = request.MaxScore,
+            IsActive = request.IsActive
+        };
+
+        await unitOfWork.Competencies.AddAsync(competency, cancellationToken);
+        await auditService.LogAsync("Competency", competency.Id, "Create", null, Map(competency), performedById, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return Map(competency);
+    }
+
+    public async Task<CompetencyDto> UpdateAsync(Guid id, UpdateCompetencyRequest request, Guid? performedById, CancellationToken cancellationToken = default)
+    {
+        EnsureValidScore(request.MaxScore);
+
+        var competency = await unitOfWork.Competencies.GetByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException("Компетенция не найдена.");
+
+        var oldValues = Map(competency);
+
+        competency.Name = request.Name.Trim();
+        competency.Description = request.Description.Trim();
+        competency.Category = request.Category.Trim();
+        competency.MaxScore = request.MaxScore;
+        competency.IsActive = request.IsActive;
+
+        unitOfWork.Competencies.Update(competency);
+        await auditService.LogAsync("Competency", id, "Update", oldValues, Map(competency), performedById, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return Map(competency);
+    }
+
+    private static void EnsureValidScore(int maxScore)
+    {
+        if (maxScore <= 0)
+        {
+            throw new BusinessException("Максимальный балл компетенции должен быть больше нуля.");
+        }
+    }
+
+    private static CompetencyDto Map(Competency competency) => new(
+        competency.Id,
+        competency.Name,
+        competency.Description,
+        competency.Category,
+        competency.MaxScore,
+        competency.IsActive);
+}
+
+public sealed class InterviewService(IUnitOfWork unitOfWork, IAuditService auditService) : IInterviewService
+{
+    public Task<IReadOnlyList<InterviewDto>> ListAsync(
+        Guid? candidateId,
+        Guid? vacancyId,
+        InterviewStatus? status,
+        string? search,
+        CancellationToken cancellationToken = default)
+    {
+        var query = unitOfWork.Interviews.Query();
+
+        if (candidateId.HasValue)
+        {
+            query = query.Where(x => x.CandidateId == candidateId.Value);
+        }
+
+        if (vacancyId.HasValue)
+        {
+            query = query.Where(x => x.VacancyId == vacancyId.Value);
+        }
+
+        if (status.HasValue)
+        {
+            query = query.Where(x => x.Status == status.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLowerInvariant();
+            query = query.Where(x =>
+                (x.Candidate != null && x.Candidate.FullName.ToLower().Contains(term))
+                || (x.Vacancy != null && x.Vacancy.Title.ToLower().Contains(term))
+                || (x.Interviewer != null && x.Interviewer.FullName.ToLower().Contains(term)));
+        }
+
+        var interviews = Project(query.OrderByDescending(x => x.PlannedDate)).ToList();
+
+        return Task.FromResult<IReadOnlyList<InterviewDto>>(interviews);
+    }
+
+    public Task<InterviewDto> GetAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var interview = Project(unitOfWork.Interviews.Query().Where(x => x.Id == id)).FirstOrDefault()
+            ?? throw new NotFoundException("Собеседование не найдено.");
+
+        return Task.FromResult(interview);
+    }
+
+    public async Task<InterviewDto> CreateAsync(CreateInterviewRequest request, Guid? performedById, CancellationToken cancellationToken = default)
+    {
+        if (request.PlannedDate == default)
+        {
+            throw new BusinessException("Укажите дату и время собеседования.");
+        }
+
+        var candidateExists = unitOfWork.Candidates.Query().Any(x => x.Id == request.CandidateId && !x.IsArchived);
+        var vacancyExists = unitOfWork.Vacancies.Query().Any(x => x.Id == request.VacancyId && x.IsActive);
+        var interviewerExists = unitOfWork.Users.Query().Any(x => x.Id == request.InterviewerId && x.IsActive);
+
+        if (!candidateExists)
+        {
+            throw new NotFoundException("Кандидат не найден или находится в архиве.");
+        }
+
+        if (!vacancyExists)
+        {
+            throw new NotFoundException("Активная вакансия не найдена.");
+        }
+
+        if (!interviewerExists)
+        {
+            throw new NotFoundException("Интервьюер не найден или неактивен.");
+        }
+
+        var interview = new Interview
+        {
+            CandidateId = request.CandidateId,
+            VacancyId = request.VacancyId,
+            InterviewerId = request.InterviewerId,
+            PlannedDate = request.PlannedDate,
+            Comments = request.Comments
+        };
+
+        await unitOfWork.Interviews.AddAsync(interview, cancellationToken);
+
+        foreach (var competencyId in (request.CompetencyIds ?? Array.Empty<Guid>()).Distinct())
+        {
+            var competency = unitOfWork.Competencies.Query().FirstOrDefault(x => x.Id == competencyId && x.IsActive)
+                ?? throw new NotFoundException($"Компетенция {competencyId} не найдена или неактивна.");
+
+            await unitOfWork.CompetencyMatrices.AddAsync(new CompetencyMatrix
+            {
+                InterviewId = interview.Id,
+                CompetencyId = competency.Id,
+                Score = 0
+            }, cancellationToken);
+        }
+
+        await auditService.LogAsync("Interview", interview.Id, "Create", null, new { interview.CandidateId, interview.VacancyId, interview.PlannedDate }, performedById, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return await GetAsync(interview.Id, cancellationToken);
+    }
+
+    public async Task<InterviewDto> UpdateStatusAsync(Guid id, UpdateInterviewStatusRequest request, Guid? performedById, CancellationToken cancellationToken = default)
+    {
+        var interview = await unitOfWork.Interviews.GetByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException("Собеседование не найдено.");
+
+        var oldValues = new { interview.Status, interview.Comments };
+
+        interview.Status = request.Status;
+        interview.Comments = request.Comments ?? interview.Comments;
+
+        unitOfWork.Interviews.Update(interview);
+        await auditService.LogAsync("Interview", id, "SetStatus", oldValues, new { interview.Status, interview.Comments }, performedById, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return await GetAsync(id, cancellationToken);
+    }
+
+    public async Task<InterviewDto> DecideAsync(Guid id, DecideInterviewRequest request, Guid? performedById, CancellationToken cancellationToken = default)
+    {
+        var interview = await unitOfWork.Interviews.GetByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException("Собеседование не найдено.");
+
+        var oldValues = new { interview.Decision, interview.Status, interview.Comments };
+
+        interview.Decision = request.Decision;
+        interview.Status = InterviewStatus.Completed;
+        interview.Comments = request.Comments ?? interview.Comments;
+
+        unitOfWork.Interviews.Update(interview);
+        await auditService.LogAsync("Interview", id, "Decide", oldValues, new { interview.Decision, interview.Status, interview.Comments }, performedById, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return await GetAsync(id, cancellationToken);
+    }
+
+    public async Task<InterviewDto> UpsertMatrixAsync(Guid id, UpsertMatrixRequest request, Guid? evaluatedById, CancellationToken cancellationToken = default)
+    {
+        var interviewExists = unitOfWork.Interviews.Query().Any(x => x.Id == id);
+
+        if (!interviewExists)
+        {
+            throw new NotFoundException("Собеседование не найдено.");
+        }
+
+        if (request.Items is null || request.Items.Count == 0)
+        {
+            throw new BusinessException("Матрица компетенций не может быть пустой.");
+        }
+
+        foreach (var item in request.Items)
+        {
+            var competency = unitOfWork.Competencies.Query().FirstOrDefault(x => x.Id == item.CompetencyId && x.IsActive)
+                ?? throw new NotFoundException($"Компетенция {item.CompetencyId} не найдена или неактивна.");
+
+            if (item.Score < 0 || item.Score > competency.MaxScore)
+            {
+                throw new BusinessException($"Оценка по компетенции \"{competency.Name}\" должна быть от 0 до {competency.MaxScore}.");
+            }
+
+            var existing = unitOfWork.CompetencyMatrices.Query()
+                .FirstOrDefault(x => x.InterviewId == id && x.CompetencyId == item.CompetencyId);
+
+            if (existing is null)
+            {
+                await unitOfWork.CompetencyMatrices.AddAsync(new CompetencyMatrix
+                {
+                    InterviewId = id,
+                    CompetencyId = item.CompetencyId,
+                    Score = item.Score,
+                    Comment = item.Comment,
+                    EvaluatedById = evaluatedById,
+                    EvaluatedAt = DateTime.UtcNow
+                }, cancellationToken);
+            }
+            else
+            {
+                existing.Score = item.Score;
+                existing.Comment = item.Comment;
+                existing.EvaluatedById = evaluatedById;
+                existing.EvaluatedAt = DateTime.UtcNow;
+                unitOfWork.CompetencyMatrices.Update(existing);
+            }
+        }
+
+        await auditService.LogAsync("Interview", id, "UpsertMatrix", null, request.Items, evaluatedById, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return await GetAsync(id, cancellationToken);
+    }
+
+    private static IQueryable<InterviewDto> Project(IQueryable<Interview> query) => query.Select(x => new InterviewDto(
+        x.Id,
+        x.CandidateId,
+        x.Candidate == null ? string.Empty : x.Candidate.FullName,
+        x.VacancyId,
+        x.Vacancy == null ? string.Empty : x.Vacancy.Title,
+        x.InterviewerId,
+        x.Interviewer == null ? string.Empty : x.Interviewer.FullName,
+        x.PlannedDate,
+        x.Status,
+        x.Decision,
+        x.Comments,
+        x.CreatedAt,
+        x.Matrices
+            .OrderBy(m => m.Competency == null ? string.Empty : m.Competency.Category)
+            .ThenBy(m => m.Competency == null ? string.Empty : m.Competency.Name)
+            .Select(m => new MatrixItemDto(
+                m.Id,
+                m.CompetencyId,
+                m.Competency == null ? string.Empty : m.Competency.Name,
+                m.Competency == null ? string.Empty : m.Competency.Category,
+                m.Competency == null ? 0 : m.Competency.MaxScore,
+                m.Score,
+                m.Comment,
+                m.EvaluatedById,
+                m.EvaluatedAt))
+            .ToList()));
+}
+
+public sealed class ReportService(IUnitOfWork unitOfWork, IPdfService pdfService) : IReportService
+{
+    public async Task<GeneratedReport> GenerateCandidateCardAsync(Guid candidateId, CancellationToken cancellationToken = default)
+    {
+        var candidate = unitOfWork.Candidates.Query().FirstOrDefault(x => x.Id == candidateId)
+            ?? throw new NotFoundException("Кандидат не найден.");
+
+        var interviewRows = unitOfWork.Interviews.Query()
+            .Where(x => x.CandidateId == candidateId)
+            .OrderByDescending(x => x.PlannedDate)
+            .Select(x => new
+            {
+                x.PlannedDate,
+                VacancyTitle = x.Vacancy == null ? string.Empty : x.Vacancy.Title,
+                x.Decision,
+                x.Status
+            })
+            .ToList();
+
+        var interviews = interviewRows
+            .Select(x => $"{x.PlannedDate:dd.MM.yyyy HH:mm} | {x.VacancyTitle} | {DecisionText(x.Decision)} | {StatusText(x.Status)}")
+            .ToList();
+
+        var document = new ReportDocument(
+            "Карточка кандидата",
+            candidate.FullName,
+            new List<ReportSection>
+            {
+                new("Контакты", new[]
+                {
+                    $"Телефон: {candidate.Phone}",
+                    $"Email: {candidate.Email ?? "-"}",
+                    $"Город: {candidate.City}",
+                    $"Желаемая позиция: {candidate.DesiredPosition}"
+                }),
+                new("Профиль", new[]
+                {
+                    $"Навыки: {candidate.Skills}",
+                    $"Образование: {candidate.Education}",
+                    $"Предыдущее место работы: {candidate.PreviousJob}"
+                }),
+                new("История собеседований", interviews.Count == 0 ? new[] { "Собеседования еще не заведены." } : interviews)
+            });
+
+        return new GeneratedReport($"{FileName(candidate.FullName)}-candidate-card.pdf", await pdfService.GenerateAsync(document, cancellationToken));
+    }
+
+    public async Task<GeneratedReport> GenerateInterviewProtocolAsync(Guid interviewId, CancellationToken cancellationToken = default)
+    {
+        var interview = unitOfWork.Interviews.Query()
+            .Where(x => x.Id == interviewId)
+            .Select(x => new
+            {
+                x.PlannedDate,
+                x.Status,
+                x.Decision,
+                x.Comments,
+                CandidateName = x.Candidate == null ? string.Empty : x.Candidate.FullName,
+                VacancyTitle = x.Vacancy == null ? string.Empty : x.Vacancy.Title,
+                InterviewerName = x.Interviewer == null ? string.Empty : x.Interviewer.FullName,
+                Matrix = x.Matrices
+                    .OrderBy(m => m.Competency == null ? string.Empty : m.Competency.Category)
+                    .ThenBy(m => m.Competency == null ? string.Empty : m.Competency.Name)
+                    .Select(m => new
+                    {
+                        Name = m.Competency == null ? string.Empty : m.Competency.Name,
+                        Category = m.Competency == null ? string.Empty : m.Competency.Category,
+                        MaxScore = m.Competency == null ? 0 : m.Competency.MaxScore,
+                        m.Score,
+                        m.Comment
+                    })
+                    .ToList()
+            })
+            .FirstOrDefault()
+            ?? throw new NotFoundException("Собеседование не найдено.");
+
+        var matrixLines = interview.Matrix.Count == 0
+            ? new List<string> { "Матрица компетенций не заполнена." }
+            : interview.Matrix.Select(x => $"{x.Category} / {x.Name}: {x.Score} из {x.MaxScore}. Комментарий: {x.Comment ?? "-"}").ToList();
+
+        var document = new ReportDocument(
+            "Протокол собеседования",
+            $"{interview.CandidateName} - {interview.VacancyTitle}",
+            new List<ReportSection>
+            {
+                new("Параметры", new[]
+                {
+                    $"Дата и время: {interview.PlannedDate:dd.MM.yyyy HH:mm}",
+                    $"Интервьюер: {interview.InterviewerName}",
+                    $"Статус: {StatusText(interview.Status)}",
+                    $"Решение: {DecisionText(interview.Decision)}",
+                    $"Комментарии: {interview.Comments ?? "-"}"
+                }),
+                new("Матрица компетенций", matrixLines)
+            });
+
+        return new GeneratedReport($"{FileName(interview.CandidateName)}-interview-protocol.pdf", await pdfService.GenerateAsync(document, cancellationToken));
+    }
+
+    public async Task<GeneratedReport> GenerateDecisionLetterAsync(Guid interviewId, CancellationToken cancellationToken = default)
+    {
+        var interview = unitOfWork.Interviews.Query()
+            .Where(x => x.Id == interviewId)
+            .Select(x => new
+            {
+                x.Decision,
+                x.Comments,
+                CandidateName = x.Candidate == null ? string.Empty : x.Candidate.FullName,
+                CandidateEmail = x.Candidate == null ? null : x.Candidate.Email,
+                VacancyTitle = x.Vacancy == null ? string.Empty : x.Vacancy.Title
+            })
+            .FirstOrDefault()
+            ?? throw new NotFoundException("Собеседование не найдено.");
+
+        var title = interview.Decision switch
+        {
+            InterviewDecision.Hired => "Оффер кандидату",
+            InterviewDecision.Rejected => "Отказ кандидату",
+            InterviewDecision.NextStage => "Приглашение на следующий этап",
+            InterviewDecision.TalentPool => "Письмо в кадровый резерв",
+            _ => "Письмо кандидату"
+        };
+
+        var body = interview.Decision switch
+        {
+            InterviewDecision.Hired => $"Поздравляем! Команда готова сделать предложение по вакансии \"{interview.VacancyTitle}\".",
+            InterviewDecision.Rejected => $"Спасибо за интерес к вакансии \"{interview.VacancyTitle}\". На текущем этапе мы не готовы продолжить процесс.",
+            InterviewDecision.NextStage => $"Приглашаем пройти следующий этап отбора по вакансии \"{interview.VacancyTitle}\".",
+            InterviewDecision.TalentPool => $"Мы сохраним ваш профиль в кадровом резерве по направлению \"{interview.VacancyTitle}\".",
+            _ => $"Решение по вакансии \"{interview.VacancyTitle}\" пока не принято."
+        };
+
+        var document = new ReportDocument(
+            title,
+            interview.CandidateName,
+            new List<ReportSection>
+            {
+                new("Кандидат", new[]
+                {
+                    $"ФИО: {interview.CandidateName}",
+                    $"Email: {interview.CandidateEmail ?? "-"}",
+                    $"Вакансия: {interview.VacancyTitle}",
+                    $"Решение: {DecisionText(interview.Decision)}"
+                }),
+                new("Текст письма", new[]
+                {
+                    body,
+                    $"Комментарий интервьюера: {interview.Comments ?? "-"}"
+                })
+            });
+
+        return new GeneratedReport($"{FileName(interview.CandidateName)}-decision-letter.pdf", await pdfService.GenerateAsync(document, cancellationToken));
+    }
+
+    private static string StatusText(InterviewStatus status) => status switch
+    {
+        InterviewStatus.Planned => "Запланировано",
+        InterviewStatus.Completed => "Завершено",
+        InterviewStatus.Cancelled => "Отменено",
+        _ => status.ToString()
+    };
+
+    private static string DecisionText(InterviewDecision decision) => decision switch
+    {
+        InterviewDecision.Pending => "Ожидает решения",
+        InterviewDecision.Hired => "Принять",
+        InterviewDecision.Rejected => "Отказать",
+        InterviewDecision.NextStage => "Следующий этап",
+        InterviewDecision.TalentPool => "Кадровый резерв",
+        _ => decision.ToString()
+    };
+
+    private static string FileName(string value)
+    {
+        var sanitized = string.Join("-", value.Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries));
+        return string.IsNullOrWhiteSpace(sanitized) ? "report" : sanitized.Trim().Replace(' ', '-').ToLowerInvariant();
+    }
+}
