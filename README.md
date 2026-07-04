@@ -16,28 +16,16 @@
 
 ## Быстрый запуск
 
-1. Поднять PostgreSQL:
+1. Поднять PostgreSQL + Backend + Frontend:
 
 ```powershell
 docker compose up -d
 ```
 
-2. Запустить API:
-
-```powershell
-dotnet run --project src/InterviewPlatform.API/InterviewPlatform.API.csproj
-```
-
-3. Войти под seed-пользователем:
+2. Войти под seed-пользователем:
 
 ```http
-POST http://localhost:5126/api/auth/login
-Content-Type: application/json
-
-{
-  "email": "admin@example.com",
-  "password": "Admin123!"
-}
+POST http://localhost:3000
 ```
 
 ## Seed-пользователи

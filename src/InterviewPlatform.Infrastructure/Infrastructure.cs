@@ -347,7 +347,7 @@ public static class DependencyInjection
 
         try
         {
-            await dbContext.Database.EnsureCreatedAsync();
+            await dbContext.Database.MigrateAsync();
             await SeedAsync(dbContext, passwordHasher);
         }
         catch (Exception ex)
