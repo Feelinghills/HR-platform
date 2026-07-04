@@ -26,7 +26,6 @@ services:
       - "5126:5126"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      # Подменяем строку подключения к БД на имя контейнера "postgres" вместо localhost
       - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=interview_platform;Username=postgres;Password=postgres
     depends_on:
       - postgres
