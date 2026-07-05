@@ -60,6 +60,16 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
                 .WithMany(x => x.CreatedCandidates)
                 .HasForeignKey(x => x.CreatedById)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(x => x.ArchivedBy)
+                .WithMany()
+                .HasForeignKey(x => x.ArchivedById)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(x => x.DeletedBy)
+                .WithMany()
+                .HasForeignKey(x => x.DeletedById)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<Vacancy>(entity =>

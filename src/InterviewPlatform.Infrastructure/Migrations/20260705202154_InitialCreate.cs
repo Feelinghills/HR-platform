@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace InterviewPlatform.Infrastructure.Migrations
 {
     /// <inheritdoc />
-    public partial class Initial : Migration
+    public partial class InitialCreate : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -112,19 +112,63 @@ namespace InterviewPlatform.Infrastructure.Migrations
                     Education = table.Column<string>(type: "character varying(1024)", maxLength: 1024, nullable: false),
                     PreviousJob = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: false),
                     Skills = table.Column<string>(type: "character varying(2048)", maxLength: 2048, nullable: false),
-                    IsArchived = table.Column<bool>(type: "boolean", nullable: false),
                     CreatedById = table.Column<Guid>(type: "uuid", nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    IsArchived = table.Column<bool>(type: "boolean", nullable: false),
+                    ArchivedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    ArchivedById = table.Column<Guid>(type: "uuid", nullable: true),
+                    ArchivedReason = table.Column<string>(type: "text", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
+                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    DeletedById = table.Column<Guid>(type: "uuid", nullable: true),
+                    DeletedReason = table.Column<string>(type: "text", nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_candidates", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_candidates_users_ArchivedById",
+                        column: x => x.ArchivedById,
+                        principalTable: "users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.SetNull);
                     table.ForeignKey(
                         name: "FK_candidates_users_CreatedById",
                         column: x => x.CreatedById,
                         principalTable: "users",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "FK_candidates_users_DeletedById",
+                        column: x => x.DeletedById,
+                        principalTable: "users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.SetNull);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "vacancy_competencies",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    VacancyId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CompetencyId = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_vacancy_competencies", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_vacancy_competencies_competencies_CompetencyId",
+                        column: x => x.CompetencyId,
+                        principalTable: "competencies",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_vacancy_competencies_vacancies_VacancyId",
+                        column: x => x.VacancyId,
+                        principalTable: "vacancies",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -210,9 +254,19 @@ namespace InterviewPlatform.Infrastructure.Migrations
                 column: "PerformedById");
 
             migrationBuilder.CreateIndex(
+                name: "IX_candidates_ArchivedById",
+                table: "candidates",
+                column: "ArchivedById");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_candidates_CreatedById",
                 table: "candidates",
                 column: "CreatedById");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_candidates_DeletedById",
+                table: "candidates",
+                column: "DeletedById");
 
             migrationBuilder.CreateIndex(
                 name: "IX_candidates_FullName",
@@ -276,6 +330,17 @@ namespace InterviewPlatform.Infrastructure.Migrations
                 name: "IX_vacancies_Title",
                 table: "vacancies",
                 column: "Title");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_vacancy_competencies_CompetencyId",
+                table: "vacancy_competencies",
+                column: "CompetencyId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_vacancy_competencies_VacancyId_CompetencyId",
+                table: "vacancy_competencies",
+                columns: new[] { "VacancyId", "CompetencyId" },
+                unique: true);
         }
 
         /// <inheritdoc />
@@ -291,10 +356,13 @@ namespace InterviewPlatform.Infrastructure.Migrations
                 name: "offer_templates");
 
             migrationBuilder.DropTable(
-                name: "competencies");
+                name: "vacancy_competencies");
 
             migrationBuilder.DropTable(
                 name: "interviews");
+
+            migrationBuilder.DropTable(
+                name: "competencies");
 
             migrationBuilder.DropTable(
                 name: "candidates");

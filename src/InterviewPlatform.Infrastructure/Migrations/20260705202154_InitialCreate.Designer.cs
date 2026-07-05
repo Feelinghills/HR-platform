@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace InterviewPlatform.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260704123815_Initial")]
-    partial class Initial
+    [Migration("20260705202154_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -71,6 +71,15 @@ namespace InterviewPlatform.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<DateTime?>("ArchivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ArchivedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ArchivedReason")
+                        .HasColumnType("text");
+
                     b.Property<string>("City")
                         .IsRequired()
                         .HasMaxLength(128)
@@ -81,6 +90,15 @@ namespace InterviewPlatform.Infrastructure.Migrations
 
                     b.Property<Guid?>("CreatedById")
                         .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DeletedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DeletedReason")
+                        .HasColumnType("text");
 
                     b.Property<string>("DesiredPosition")
                         .IsRequired()
@@ -104,6 +122,9 @@ namespace InterviewPlatform.Infrastructure.Migrations
                     b.Property<bool>("IsArchived")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Phone")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -121,7 +142,11 @@ namespace InterviewPlatform.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ArchivedById");
+
                     b.HasIndex("CreatedById");
+
+                    b.HasIndex("DeletedById");
 
                     b.HasIndex("FullName");
 
@@ -352,6 +377,28 @@ namespace InterviewPlatform.Infrastructure.Migrations
                     b.ToTable("vacancies", (string)null);
                 });
 
+            modelBuilder.Entity("InterviewPlatform.Domain.Models.VacancyCompetency", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CompetencyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("VacancyId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompetencyId");
+
+                    b.HasIndex("VacancyId", "CompetencyId")
+                        .IsUnique();
+
+                    b.ToTable("vacancy_competencies", (string)null);
+                });
+
             modelBuilder.Entity("InterviewPlatform.Domain.Models.AuditLog", b =>
                 {
                     b.HasOne("InterviewPlatform.Domain.Models.User", "PerformedBy")
@@ -364,12 +411,26 @@ namespace InterviewPlatform.Infrastructure.Migrations
 
             modelBuilder.Entity("InterviewPlatform.Domain.Models.Candidate", b =>
                 {
+                    b.HasOne("InterviewPlatform.Domain.Models.User", "ArchivedBy")
+                        .WithMany()
+                        .HasForeignKey("ArchivedById")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("InterviewPlatform.Domain.Models.User", "CreatedBy")
                         .WithMany("CreatedCandidates")
                         .HasForeignKey("CreatedById")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("InterviewPlatform.Domain.Models.User", "DeletedBy")
+                        .WithMany()
+                        .HasForeignKey("DeletedById")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("ArchivedBy");
+
                     b.Navigation("CreatedBy");
+
+                    b.Navigation("DeletedBy");
                 });
 
             modelBuilder.Entity("InterviewPlatform.Domain.Models.CompetencyMatrix", b =>
@@ -425,6 +486,25 @@ namespace InterviewPlatform.Infrastructure.Migrations
                     b.Navigation("Vacancy");
                 });
 
+            modelBuilder.Entity("InterviewPlatform.Domain.Models.VacancyCompetency", b =>
+                {
+                    b.HasOne("InterviewPlatform.Domain.Models.Competency", "Competency")
+                        .WithMany("VacancyCompetencies")
+                        .HasForeignKey("CompetencyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("InterviewPlatform.Domain.Models.Vacancy", "Vacancy")
+                        .WithMany("VacancyCompetencies")
+                        .HasForeignKey("VacancyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Competency");
+
+                    b.Navigation("Vacancy");
+                });
+
             modelBuilder.Entity("InterviewPlatform.Domain.Models.Candidate", b =>
                 {
                     b.Navigation("Interviews");
@@ -433,6 +513,8 @@ namespace InterviewPlatform.Infrastructure.Migrations
             modelBuilder.Entity("InterviewPlatform.Domain.Models.Competency", b =>
                 {
                     b.Navigation("Matrices");
+
+                    b.Navigation("VacancyCompetencies");
                 });
 
             modelBuilder.Entity("InterviewPlatform.Domain.Models.Interview", b =>
@@ -454,6 +536,8 @@ namespace InterviewPlatform.Infrastructure.Migrations
             modelBuilder.Entity("InterviewPlatform.Domain.Models.Vacancy", b =>
                 {
                     b.Navigation("Interviews");
+
+                    b.Navigation("VacancyCompetencies");
                 });
 #pragma warning restore 612, 618
         }

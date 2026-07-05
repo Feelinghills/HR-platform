@@ -71,10 +71,19 @@ public sealed class Candidate
     public string Education { get; set; } = string.Empty;
     public string PreviousJob { get; set; } = string.Empty;
     public string Skills { get; set; } = string.Empty;
-    public bool IsArchived { get; set; }
     public Guid? CreatedById { get; set; }
     public User? CreatedBy { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public bool IsArchived { get; set; }
+    public DateTime? ArchivedAt { get; set; }
+    public Guid? ArchivedById { get; set; }
+    public User? ArchivedBy { get; set; }
+    public string? ArchivedReason { get; set; }
+    public bool IsDeleted { get; set; }
+    public DateTime? DeletedAt { get; set; }
+    public Guid? DeletedById { get; set; }
+    public User? DeletedBy { get; set; }
+    public string? DeletedReason { get; set; }
 
     public ICollection<Interview> Interviews { get; set; } = new List<Interview>();
 }
