@@ -73,21 +73,22 @@ export default function InterviewDetailPage() {
     }
   }, [id]);
 
-  const handleSaveMatrix = async () => {
-    if (!id) return;
+  const handleComplete = async () => {
+    if (!id || !interview) return;
     setError('');
     setSuccess('');
+
     try {
       const items = Object.entries(matrixScores).map(([competencyId, v]) => ({
         competencyId,
         score: v.score,
         comment: v.comment || null,
       }));
-      const res = await interviewsApi.upsertMatrix(id, { items });
+      await interviewsApi.upsertMatrix(id, { items });
+      const res = await interviewsApi.updateStatus(id, { status: InterviewStatus.Completed, comments: null });
       setInterview(res.data);
-      setSuccess('Матрица оценок сохранена');
     } catch (e: any) {
-      setError(e.response?.data?.message || 'Ошибка сохранения');
+      setError(e.response?.data?.message || 'Ошибка');
     }
   };
 
@@ -167,7 +168,7 @@ export default function InterviewDetailPage() {
                 </Typography>
                 <Typography>
                   <strong>Решение:</strong>{' '}
-                  <Chip size="small" label={decisionLabels[interview.decision]} color={decisionColors[interview.decision]} />
+                  <Chip size="small" label={interview.status === InterviewStatus.Cancelled ? 'Без решения' : decisionLabels[interview.decision]} color={decisionColors[interview.decision]} />
                 </Typography>
                 {interview.comments && (
                   <Typography><strong>Комментарий:</strong> {interview.comments}</Typography>
@@ -186,10 +187,29 @@ export default function InterviewDetailPage() {
 
               {canEditMatrix && interview.status === InterviewStatus.Planned && (
                 <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
-                  <Button size="small" variant="outlined" onClick={() => handleStatusChange(InterviewStatus.Completed)}>
+                  <Button size="small" variant="outlined" onClick={() => {
+                    if (interview.matrix.length > 0) {
+                      const missing = interview.matrix.filter((m) => {
+                        const v = matrixScores[m.competencyId];
+                        return !(v?.comment ?? m.comment ?? '').trim();
+                      });
+                      if (missing.length > 0) {
+                        const names = missing.map((m) => m.competencyName).join(', ');
+                        setError(`Заполните комментарий для компетенций: ${names}`);
+                        return;
+                      }
+                    }
+                    if (window.confirm('Вы уверены, что хотите завершить собеседование?')) {
+                      handleComplete();
+                    }
+                  }}>
                     Завершить
                   </Button>
-                  <Button size="small" variant="outlined" color="error" onClick={() => handleStatusChange(InterviewStatus.Cancelled)}>
+                  <Button size="small" variant="outlined" color="error" onClick={() => {
+                    if (window.confirm('Вы уверены, что хотите отменить собеседование?')) {
+                      handleStatusChange(InterviewStatus.Cancelled);
+                    }
+                  }}>
                     Отменить
                   </Button>
                 </Box>
@@ -228,11 +248,6 @@ export default function InterviewDetailPage() {
             <CardContent>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                 <Typography variant="h6">Матрица оценок компетенций</Typography>
-                {canEditMatrix && (
-                  <Button variant="contained" size="small" onClick={handleSaveMatrix}>
-                    Сохранить оценки
-                  </Button>
-                )}
               </Box>
               <Divider sx={{ mb: 2 }} />
 
@@ -247,7 +262,7 @@ export default function InterviewDetailPage() {
                         <TableCell sx={{ fontWeight: 700 }}>Категория</TableCell>
                         <TableCell sx={{ fontWeight: 700 }}>Макс. балл</TableCell>
                         <TableCell sx={{ fontWeight: 700 }}>Оценка</TableCell>
-                        <TableCell sx={{ fontWeight: 700 }}>Комментарий</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Комментарий *</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -279,6 +294,7 @@ export default function InterviewDetailPage() {
                             {canEditMatrix ? (
                               <TextField
                                 size="small"
+                                required
                                 value={matrixScores[m.competencyId]?.comment ?? m.comment ?? ''}
                                 onChange={(e) =>
                                   setMatrixScores({

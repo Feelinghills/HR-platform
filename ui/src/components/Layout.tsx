@@ -50,7 +50,7 @@ const roleColors: Record<string, string> = {
 const roleLabels: Record<string, string> = {
   Admin: 'Администратор',
   HR: 'HR',
-  DecisionMaker: 'Решающий',
+  DecisionMaker: 'Решала',
 };
 
 export default function Layout() {

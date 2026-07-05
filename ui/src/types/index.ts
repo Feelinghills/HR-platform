@@ -178,7 +178,7 @@ export const decisionLabels: Record<InterviewDecision, string> = {
 export const roleLabels: Record<UserRole, string> = {
   [UserRole.Admin]: 'Администратор',
   [UserRole.HR]: 'HR-специалист',
-  [UserRole.DecisionMaker]: 'Принимающий решение',
+  [UserRole.DecisionMaker]: 'Решала',
 };
 
 export const decisionColors: Record<InterviewDecision, 'default' | 'success' | 'error' | 'info' | 'warning'> = {

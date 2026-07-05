@@ -406,7 +406,7 @@ public static class DependencyInjection
                 new User
                 {
                     Email = "decision@example.com",
-                    FullName = "Принимающий решение",
+                    FullName = "Решала",
                     Role = UserRole.DecisionMaker,
                     PasswordHash = passwordHasher.Hash("Decision123!")
                 });
