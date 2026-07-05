@@ -28,7 +28,7 @@ import { Add, Archive, Visibility } from '@mui/icons-material';
 import { candidatesApi } from '../api/candidates';
 import { useAuth } from '../contexts/AuthContext';
 import { UserRole, type CandidateDto } from '../types';
-import { required, hasAtLeastTwoWords, isValidPhone, isValidEmail } from '../utils/validation';
+import { required, hasAtLeastTwoWords, isValidPhone, isValidEmail, formatPhone } from '../utils/validation';
 
 const emptyCandidate = {
   fullName: '',
@@ -104,7 +104,7 @@ export default function CandidatesPage() {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h4">Кандидаты</Typography>
         {canEdit && (
-          <Button variant="contained" startIcon={<Add />} onClick={() => setDialogOpen(true)}>
+          <Button variant="contained" startIcon={<Add />} onClick={() => { setForm({ ...emptyCandidate, phone: '+7' }); setDialogOpen(true); }}>
             Добавить кандидата
           </Button>
         )}
@@ -200,7 +200,7 @@ export default function CandidatesPage() {
             <TextField
               label="Телефон *"
               value={form.phone}
-              onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              onChange={(e) => setForm({ ...form, phone: formatPhone(e.target.value) })}
               placeholder="+7 (XXX) XXX-XX-XX"
               error={form.phone.length > 0 && !isValidPhone(form.phone)}
               helperText={form.phone.length > 0 && !isValidPhone(form.phone) ? 'Формат: +7 (XXX) XXX-XX-XX' : ''}

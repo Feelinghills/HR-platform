@@ -33,6 +33,7 @@ import { competenciesApi } from '../api/competencies';
 import { useAuth } from '../contexts/AuthContext';
 import {
   UserRole,
+  InterviewStatus,
   statusLabels,
   decisionLabels,
   decisionColors,
@@ -171,11 +172,17 @@ export default function InterviewsPage() {
                   <Chip size="small" label={statusLabels[i.status]} color={statusColors[i.status] || 'default'} />
                 </TableCell>
                 <TableCell>
-                  <Chip
-                    size="small"
-                    label={decisionLabels[i.decision]}
-                    color={decisionColors[i.decision] || 'default'}
-                  />
+                  {i.status === InterviewStatus.Planned ? (
+                    <Chip size="small" label="Ожидает завершения" color="info" variant="outlined" />
+                  ) : i.status === InterviewStatus.Cancelled ? (
+                    <Chip size="small" label="Без решения" color="default" variant="outlined" />
+                  ) : (
+                    <Chip
+                      size="small"
+                      label={decisionLabels[i.decision]}
+                      color={decisionColors[i.decision] || 'default'}
+                    />
+                  )}
                 </TableCell>
                 <TableCell align="right">
                   <Tooltip title="Открыть">
