@@ -210,7 +210,7 @@ public sealed class InterviewsController(IInterviewService interviewService) : C
         return Ok(await interviewService.UpsertMatrixAsync(id, request, User.GetUserId(), cancellationToken));
     }
 
-    [Authorize(Roles = "Admin,DecisionMaker")]
+    [Authorize(Roles = "DecisionMaker")]
     [HttpPost("{id:guid}/decision")]
     public async Task<ActionResult<InterviewDto>> Decide(Guid id, DecideInterviewRequest request, CancellationToken cancellationToken)
     {

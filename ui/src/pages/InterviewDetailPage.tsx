@@ -56,7 +56,7 @@ export default function InterviewDetailPage() {
   const [success, setSuccess] = useState('');
 
   const canEditMatrix = user?.role === UserRole.Admin || user?.role === UserRole.HR;
-  const canDecide = user?.role === UserRole.Admin || user?.role === UserRole.DecisionMaker;
+  const canDecide = user?.role === UserRole.DecisionMaker;
 
   useEffect(() => {
     if (id) {

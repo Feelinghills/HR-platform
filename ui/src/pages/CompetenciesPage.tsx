@@ -137,7 +137,7 @@ export default function CompetenciesPage() {
             <TextField label="Название *" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             <TextField label="Описание *" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} multiline rows={2} />
             <TextField label="Категория *" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
-            <TextField label="Макс. балл" type="number" value={form.maxScore} onChange={(e) => setForm({ ...form, maxScore: parseInt(e.target.value) || 5 })} />
+            <TextField label="Макс. балл" type="number" value={form.maxScore} onChange={(e) => setForm({ ...form, maxScore: Math.min(5, Math.max(1, parseInt(e.target.value) || 5)) })} slotProps={{ htmlInput: { min: 1, max: 5 } }} />
           </Box>
         </DialogContent>
         <DialogActions>

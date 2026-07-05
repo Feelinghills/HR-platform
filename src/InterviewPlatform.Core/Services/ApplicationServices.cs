@@ -371,9 +371,9 @@ public sealed class CompetencyService(IUnitOfWork unitOfWork, IAuditService audi
 
     private static void EnsureValidScore(int maxScore)
     {
-        if (maxScore <= 0)
+        if (maxScore <= 0 || maxScore > 5)
         {
-            throw new BusinessException("Максимальный балл компетенции должен быть больше нуля.");
+            throw new BusinessException("Максимальный балл компетенции должен быть от 1 до 5.");
         }
     }
 
