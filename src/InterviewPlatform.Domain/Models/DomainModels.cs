@@ -56,6 +56,7 @@ public sealed class Vacancy
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    public ICollection<VacancyCompetency> VacancyCompetencies { get; set; } = new List<VacancyCompetency>();
     public ICollection<Interview> Interviews { get; set; } = new List<Interview>();
 }
 
@@ -105,7 +106,17 @@ public sealed class Competency
     public int MaxScore { get; set; } = 5;
     public bool IsActive { get; set; } = true;
 
+    public ICollection<VacancyCompetency> VacancyCompetencies { get; set; } = new List<VacancyCompetency>();
     public ICollection<CompetencyMatrix> Matrices { get; set; } = new List<CompetencyMatrix>();
+}
+
+public sealed class VacancyCompetency
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid VacancyId { get; set; }
+    public Vacancy? Vacancy { get; set; }
+    public Guid CompetencyId { get; set; }
+    public Competency? Competency { get; set; }
 }
 
 public sealed class CompetencyMatrix

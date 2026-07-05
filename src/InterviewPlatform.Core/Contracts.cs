@@ -47,11 +47,11 @@ public sealed record UpdateCandidateRequest(
     string Skills,
     bool IsArchived);
 
-public sealed record VacancyDto(Guid Id, string Title, string Description, string Requirements, bool IsActive, DateTime CreatedAt);
+public sealed record VacancyDto(Guid Id, string Title, string Description, string Requirements, bool IsActive, DateTime CreatedAt, IReadOnlyList<Guid> CompetencyIds);
 
-public sealed record CreateVacancyRequest(string Title, string Description, string Requirements, bool IsActive = true);
+public sealed record CreateVacancyRequest(string Title, string Description, string Requirements, bool IsActive = true, IReadOnlyList<Guid>? CompetencyIds = null);
 
-public sealed record UpdateVacancyRequest(string Title, string Description, string Requirements, bool IsActive);
+public sealed record UpdateVacancyRequest(string Title, string Description, string Requirements, bool IsActive, IReadOnlyList<Guid>? CompetencyIds = null);
 
 public sealed record CompetencyDto(Guid Id, string Name, string Description, string Category, int MaxScore, bool IsActive);
 
@@ -94,8 +94,7 @@ public sealed record CreateInterviewRequest(
     Guid VacancyId,
     Guid InterviewerId,
     DateTime PlannedDate,
-    string? Comments,
-    IReadOnlyCollection<Guid> CompetencyIds);
+    string? Comments);
 
 public sealed record UpdateInterviewStatusRequest(InterviewStatus Status, string? Comments);
 
@@ -124,6 +123,7 @@ public interface IUnitOfWork
     IRepository<Interview> Interviews { get; }
     IRepository<Competency> Competencies { get; }
     IRepository<CompetencyMatrix> CompetencyMatrices { get; }
+    IRepository<VacancyCompetency> VacancyCompetencies { get; }
     IRepository<AuditLog> AuditLogs { get; }
     IRepository<OfferTemplate> OfferTemplates { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);

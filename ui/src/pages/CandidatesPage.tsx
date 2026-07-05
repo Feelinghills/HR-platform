@@ -28,6 +28,7 @@ import { Add, Archive, Visibility } from '@mui/icons-material';
 import { candidatesApi } from '../api/candidates';
 import { useAuth } from '../contexts/AuthContext';
 import { UserRole, type CandidateDto } from '../types';
+import { required, hasAtLeastTwoWords, isValidPhone, isValidEmail } from '../utils/validation';
 
 const emptyCandidate = {
   fullName: '',
@@ -39,6 +40,19 @@ const emptyCandidate = {
   previousJob: '',
   skills: '',
 };
+
+function useCandidateValid(form: typeof emptyCandidate) {
+  return (
+    required(form.fullName) && hasAtLeastTwoWords(form.fullName) &&
+    required(form.phone) && isValidPhone(form.phone) &&
+    isValidEmail(form.email) &&
+    required(form.city) &&
+    required(form.desiredPosition) &&
+    required(form.education) &&
+    required(form.previousJob) &&
+    required(form.skills)
+  );
+}
 
 export default function CandidatesPage() {
   const { user } = useAuth();
@@ -52,6 +66,7 @@ export default function CandidatesPage() {
   const [form, setForm] = useState(emptyCandidate);
   const [error, setError] = useState('');
   const canEdit = user?.role === UserRole.Admin || user?.role === UserRole.HR;
+  const formValid = useCandidateValid(form);
 
   const load = () => {
     setLoading(true);
@@ -65,6 +80,7 @@ export default function CandidatesPage() {
   const handleSearch = () => load();
 
   const handleCreate = async () => {
+    if (!formValid) return;
     setError('');
     try {
       await candidatesApi.create(form as any);
@@ -169,15 +185,33 @@ export default function CandidatesPage() {
         </Table>
       </TableContainer>
 
-      {/* Create dialog */}
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Новый кандидат</DialogTitle>
         <DialogContent>
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
-            <TextField label="ФИО *" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} />
-            <TextField label="Телефон *" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-            <TextField label="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            <TextField
+              label="ФИО *"
+              value={form.fullName}
+              onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+              error={form.fullName.length > 0 && (!required(form.fullName) || !hasAtLeastTwoWords(form.fullName))}
+              helperText={form.fullName.length > 0 && !hasAtLeastTwoWords(form.fullName) ? 'Укажите минимум 2 слова' : ''}
+            />
+            <TextField
+              label="Телефон *"
+              value={form.phone}
+              onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              placeholder="+7 (XXX) XXX-XX-XX"
+              error={form.phone.length > 0 && !isValidPhone(form.phone)}
+              helperText={form.phone.length > 0 && !isValidPhone(form.phone) ? 'Формат: +7 (XXX) XXX-XX-XX' : ''}
+            />
+            <TextField
+              label="Email"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              error={form.email.length > 0 && !isValidEmail(form.email)}
+              helperText={form.email.length > 0 && !isValidEmail(form.email) ? 'Некорректный email' : ''}
+            />
             <TextField label="Город *" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
             <TextField label="Желаемая должность *" value={form.desiredPosition} onChange={(e) => setForm({ ...form, desiredPosition: e.target.value })} />
             <TextField label="Образование *" value={form.education} onChange={(e) => setForm({ ...form, education: e.target.value })} />
@@ -187,11 +221,10 @@ export default function CandidatesPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDialogOpen(false)}>Отмена</Button>
-          <Button variant="contained" onClick={handleCreate}>Создать</Button>
+          <Button variant="contained" disabled={!formValid} onClick={handleCreate}>Создать</Button>
         </DialogActions>
       </Dialog>
 
-      {/* Detail dialog */}
       <Dialog open={detailOpen} onClose={() => setDetailOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Карточка кандидата</DialogTitle>
         <DialogContent>

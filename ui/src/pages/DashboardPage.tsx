@@ -98,7 +98,7 @@ export default function DashboardPage() {
         cancelled: interviews.filter((x) => x.status === InterviewStatus.Cancelled).length,
         hired: interviews.filter((x) => x.decision === InterviewDecision.Hired).length,
         rejected: interviews.filter((x) => x.decision === InterviewDecision.Rejected).length,
-        pending: interviews.filter((x) => x.decision === InterviewDecision.Pending).length,
+        pending: interviews.filter((x) => x.status === InterviewStatus.Completed && x.decision === InterviewDecision.Pending).length,
       });
     }).finally(() => setLoading(false));
   }, []);

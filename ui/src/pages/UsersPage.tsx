@@ -25,6 +25,7 @@ import {
 import { Add, Block, CheckCircle } from '@mui/icons-material';
 import { usersApi } from '../api/users';
 import { UserRole, roleLabels, type UserDto } from '../types';
+import { required, isValidEmail } from '../utils/validation';
 
 export default function UsersPage() {
   const [users, setUsers] = useState<UserDto[]>([]);
@@ -32,6 +33,8 @@ export default function UsersPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [error, setError] = useState('');
   const [form, setForm] = useState({ email: '', password: '', fullName: '', role: UserRole.HR });
+
+  const formValid = required(form.fullName) && required(form.email) && isValidEmail(form.email) && required(form.password) && required(form.role);
 
   const load = () => {
     setLoading(true);
@@ -41,6 +44,7 @@ export default function UsersPage() {
   useEffect(() => { load(); }, []);
 
   const handleCreate = async () => {
+    if (!formValid) return;
     setError('');
     try {
       await usersApi.create(form);
@@ -119,7 +123,14 @@ export default function UsersPage() {
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
             <TextField label="ФИО *" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} />
-            <TextField label="Email *" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            <TextField
+              label="Email *"
+              type="email"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              error={form.email.length > 0 && !isValidEmail(form.email)}
+              helperText={form.email.length > 0 && !isValidEmail(form.email) ? 'Некорректный email' : ''}
+            />
             <TextField label="Пароль *" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
             <TextField select label="Роль *" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })}>
               <MenuItem value={UserRole.Admin}>{roleLabels[UserRole.Admin]}</MenuItem>
@@ -130,7 +141,7 @@ export default function UsersPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDialogOpen(false)}>Отмена</Button>
-          <Button variant="contained" onClick={handleCreate}>Создать</Button>
+          <Button variant="contained" disabled={!formValid} onClick={handleCreate}>Создать</Button>
         </DialogActions>
       </Dialog>
     </Box>

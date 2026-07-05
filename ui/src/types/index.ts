@@ -69,6 +69,7 @@ export interface VacancyDto {
   requirements: string;
   isActive: boolean;
   createdAt: string;
+  competencyIds: string[];
 }
 
 export interface CreateVacancyRequest {
@@ -76,6 +77,15 @@ export interface CreateVacancyRequest {
   description: string;
   requirements: string;
   isActive?: boolean;
+  competencyIds?: string[];
+}
+
+export interface UpdateVacancyRequest {
+  title: string;
+  description: string;
+  requirements: string;
+  isActive: boolean;
+  competencyIds?: string[];
 }
 
 export interface CompetencyDto {
@@ -135,7 +145,6 @@ export interface CreateInterviewRequest {
   interviewerId: string;
   plannedDate: string;
   comments: string | null;
-  competencyIds: string[];
 }
 
 export interface UpdateInterviewStatusRequest {
@@ -170,4 +179,12 @@ export const roleLabels: Record<UserRole, string> = {
   [UserRole.Admin]: 'Администратор',
   [UserRole.HR]: 'HR-специалист',
   [UserRole.DecisionMaker]: 'Принимающий решение',
+};
+
+export const decisionColors: Record<InterviewDecision, 'default' | 'success' | 'error' | 'info' | 'warning'> = {
+  Pending: 'default',
+  Hired: 'success',
+  Rejected: 'error',
+  NextStage: 'info',
+  TalentPool: 'warning',
 };

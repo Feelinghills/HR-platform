@@ -232,10 +232,9 @@ public sealed class VacancyService(IUnitOfWork unitOfWork, IAuditService auditSe
             query = query.Where(x => x.IsActive);
         }
 
-        var vacancies = query
-            .OrderBy(x => x.Title)
-            .Select(x => Map(x))
-            .ToList();
+        var vacancyList = query.OrderBy(x => x.Title).ToList();
+        var allLinks = unitOfWork.VacancyCompetencies.Query().ToList();
+        var vacancies = vacancyList.Select(x => Map(x, allLinks)).ToList();
 
         return Task.FromResult<IReadOnlyList<VacancyDto>>(vacancies);
     }
@@ -244,11 +243,14 @@ public sealed class VacancyService(IUnitOfWork unitOfWork, IAuditService auditSe
     {
         var vacancy = unitOfWork.Vacancies.Query()
             .Where(x => x.Id == id)
-            .Select(x => Map(x))
             .FirstOrDefault()
             ?? throw new NotFoundException("Вакансия не найдена.");
 
-        return Task.FromResult(vacancy);
+        var links = unitOfWork.VacancyCompetencies.Query()
+            .Where(x => x.VacancyId == id)
+            .ToList();
+
+        return Task.FromResult(Map(vacancy, links));
     }
 
     public async Task<VacancyDto> CreateAsync(CreateVacancyRequest request, Guid? performedById, CancellationToken cancellationToken = default)
@@ -262,10 +264,31 @@ public sealed class VacancyService(IUnitOfWork unitOfWork, IAuditService auditSe
         };
 
         await unitOfWork.Vacancies.AddAsync(vacancy, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        if (request.CompetencyIds is { Count: > 0 })
+        {
+            foreach (var competencyId in request.CompetencyIds.Distinct())
+            {
+                var competencyExists = unitOfWork.Competencies.Query().Any(x => x.Id == competencyId && x.IsActive);
+                if (!competencyExists)
+                {
+                    throw new NotFoundException($"Компетенция {competencyId} не найдена или неактивна.");
+                }
+
+                await unitOfWork.VacancyCompetencies.AddAsync(new VacancyCompetency
+                {
+                    VacancyId = vacancy.Id,
+                    CompetencyId = competencyId
+                }, cancellationToken);
+            }
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
         await auditService.LogAsync("Vacancy", vacancy.Id, "Create", null, Map(vacancy), performedById, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return Map(vacancy);
+        return await GetAsync(vacancy.Id, cancellationToken);
     }
 
     public async Task<VacancyDto> UpdateAsync(Guid id, UpdateVacancyRequest request, Guid? performedById, CancellationToken cancellationToken = default)
@@ -281,19 +304,52 @@ public sealed class VacancyService(IUnitOfWork unitOfWork, IAuditService auditSe
         vacancy.IsActive = request.IsActive;
 
         unitOfWork.Vacancies.Update(vacancy);
+
+        var existingLinks = unitOfWork.VacancyCompetencies.Query()
+            .Where(x => x.VacancyId == id)
+            .ToList();
+
+        var newIds = (request.CompetencyIds ?? Array.Empty<Guid>()).Distinct().ToList();
+
+        foreach (var link in existingLinks.Where(x => !newIds.Contains(x.CompetencyId)))
+        {
+            unitOfWork.VacancyCompetencies.Remove(link);
+        }
+
+        foreach (var competencyId in newIds.Where(nid => !existingLinks.Any(x => x.CompetencyId == nid)))
+        {
+            var competencyExists = unitOfWork.Competencies.Query().Any(x => x.Id == competencyId && x.IsActive);
+            if (!competencyExists)
+            {
+                throw new NotFoundException($"Компетенция {competencyId} не найдена или неактивна.");
+            }
+
+            await unitOfWork.VacancyCompetencies.AddAsync(new VacancyCompetency
+            {
+                VacancyId = id,
+                CompetencyId = competencyId
+            }, cancellationToken);
+        }
+
         await auditService.LogAsync("Vacancy", id, "Update", oldValues, Map(vacancy), performedById, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return Map(vacancy);
+        return await GetAsync(id, cancellationToken);
     }
 
-    private static VacancyDto Map(Vacancy vacancy) => new(
-        vacancy.Id,
-        vacancy.Title,
-        vacancy.Description,
-        vacancy.Requirements,
-        vacancy.IsActive,
-        vacancy.CreatedAt);
+    private static VacancyDto Map(Vacancy vacancy, List<VacancyCompetency>? links = null)
+    {
+        var competencyIds = links?.Where(vc => vc.VacancyId == vacancy.Id).Select(vc => vc.CompetencyId).ToList()
+            ?? new List<Guid>();
+        return new VacancyDto(
+            vacancy.Id,
+            vacancy.Title,
+            vacancy.Description,
+            vacancy.Requirements,
+            vacancy.IsActive,
+            vacancy.CreatedAt,
+            competencyIds);
+    }
 }
 
 public sealed class CompetencyService(IUnitOfWork unitOfWork, IAuditService auditService) : ICompetencyService
@@ -442,7 +498,9 @@ public sealed class InterviewService(IUnitOfWork unitOfWork, IAuditService audit
         }
 
         var candidateExists = unitOfWork.Candidates.Query().Any(x => x.Id == request.CandidateId && !x.IsArchived);
-        var vacancyExists = unitOfWork.Vacancies.Query().Any(x => x.Id == request.VacancyId && x.IsActive);
+        var vacancy = unitOfWork.Vacancies.Query()
+            .Where(x => x.Id == request.VacancyId && x.IsActive)
+            .FirstOrDefault();
         var interviewerExists = unitOfWork.Users.Query().Any(x => x.Id == request.InterviewerId && x.IsActive);
 
         if (!candidateExists)
@@ -450,7 +508,7 @@ public sealed class InterviewService(IUnitOfWork unitOfWork, IAuditService audit
             throw new NotFoundException("Кандидат не найден или находится в архиве.");
         }
 
-        if (!vacancyExists)
+        if (vacancy is null)
         {
             throw new NotFoundException("Активная вакансия не найдена.");
         }
@@ -471,7 +529,12 @@ public sealed class InterviewService(IUnitOfWork unitOfWork, IAuditService audit
 
         await unitOfWork.Interviews.AddAsync(interview, cancellationToken);
 
-        foreach (var competencyId in (request.CompetencyIds ?? Array.Empty<Guid>()).Distinct())
+        var vacancyCompetencyIds = unitOfWork.VacancyCompetencies.Query()
+            .Where(vc => vc.VacancyId == request.VacancyId)
+            .Select(vc => vc.CompetencyId)
+            .ToList();
+
+        foreach (var competencyId in vacancyCompetencyIds)
         {
             var competency = unitOfWork.Competencies.Query().FirstOrDefault(x => x.Id == competencyId && x.IsActive)
                 ?? throw new NotFoundException($"Компетенция {competencyId} не найдена или неактивна.");
@@ -527,11 +590,12 @@ public sealed class InterviewService(IUnitOfWork unitOfWork, IAuditService audit
 
     public async Task<InterviewDto> UpsertMatrixAsync(Guid id, UpsertMatrixRequest request, Guid? evaluatedById, CancellationToken cancellationToken = default)
     {
-        var interviewExists = unitOfWork.Interviews.Query().Any(x => x.Id == id);
+        var interview = await unitOfWork.Interviews.GetByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException("Собеседование не найдено.");
 
-        if (!interviewExists)
+        if (interview.Status != InterviewStatus.Planned)
         {
-            throw new NotFoundException("Собеседование не найдено.");
+            throw new BusinessException("Оценки можно редактировать только для запланированного собеседования.");
         }
 
         if (request.Items is null || request.Items.Count == 0)

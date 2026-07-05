@@ -55,7 +55,7 @@ export default function InterviewDetailPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const canEditMatrix = user?.role === UserRole.Admin || user?.role === UserRole.HR;
+  const canEditMatrix = (user?.role === UserRole.Admin || user?.role === UserRole.HR) && interview?.status === InterviewStatus.Planned;
   const canDecide = user?.role === UserRole.DecisionMaker;
 
   useEffect(() => {

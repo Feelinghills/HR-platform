@@ -32,16 +32,18 @@ public sealed class AuthController(IAuthService authService) : ControllerBase
 }
 
 [ApiController]
-[Authorize(Roles = "Admin")]
+[Authorize]
 [Route("api/users")]
 public sealed class UsersController(IAuthService authService) : ControllerBase
 {
+    [Authorize(Roles = "Admin,HR")]
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<UserDto>>> List(CancellationToken cancellationToken)
     {
         return Ok(await authService.ListUsersAsync(cancellationToken));
     }
 
+    [Authorize(Roles = "Admin")]
     [HttpPost]
     public async Task<ActionResult<UserDto>> Create(RegisterUserRequest request, CancellationToken cancellationToken)
     {
@@ -49,6 +51,7 @@ public sealed class UsersController(IAuthService authService) : ControllerBase
         return CreatedAtAction(nameof(List), new { id = user.Id }, user);
     }
 
+    [Authorize(Roles = "Admin")]
     [HttpPatch("{id:guid}/status")]
     public async Task<ActionResult<UserDto>> SetStatus(Guid id, UpdateUserStatusRequest request, CancellationToken cancellationToken)
     {

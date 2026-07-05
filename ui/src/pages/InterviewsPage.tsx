@@ -29,15 +29,20 @@ import { interviewsApi } from '../api/interviews';
 import { candidatesApi } from '../api/candidates';
 import { vacanciesApi } from '../api/vacancies';
 import { usersApi } from '../api/users';
+import { competenciesApi } from '../api/competencies';
 import { useAuth } from '../contexts/AuthContext';
 import {
   UserRole,
   statusLabels,
+  decisionLabels,
+  decisionColors,
   type InterviewDto,
   type CandidateDto,
   type VacancyDto,
   type UserDto,
+  type CompetencyDto,
 } from '../types';
+import { required } from '../utils/validation';
 
 const statusColors: Record<string, 'info' | 'success' | 'default' | 'error'> = {
   Planned: 'info',
@@ -56,6 +61,7 @@ export default function InterviewsPage() {
   const [candidates, setCandidates] = useState<CandidateDto[]>([]);
   const [vacancies, setVacancies] = useState<VacancyDto[]>([]);
   const [users, setUsers] = useState<UserDto[]>([]);
+  const [allCompetencies, setAllCompetencies] = useState<CompetencyDto[]>([]);
   const [form, setForm] = useState({
     candidateId: '',
     vacancyId: '',
@@ -64,6 +70,8 @@ export default function InterviewsPage() {
     comments: '',
   });
   const canEdit = user?.role === UserRole.Admin || user?.role === UserRole.HR;
+
+  const formValid = required(form.candidateId) && required(form.vacancyId) && required(form.interviewerId) && required(form.plannedDate);
 
   const load = () => {
     setLoading(true);
@@ -79,29 +87,36 @@ export default function InterviewsPage() {
       candidatesApi.list(),
       vacanciesApi.list(),
       usersApi.list(),
-    ]).then(([c, v, u]) => {
+      competenciesApi.list(true),
+    ]).then(([c, v, u, comp]) => {
       setCandidates(c.data);
       setVacancies(v.data);
       setUsers(u.data);
+      setAllCompetencies(comp.data);
+      setForm({ candidateId: '', vacancyId: '', interviewerId: '', plannedDate: '', comments: '' });
       setDialogOpen(true);
     });
   };
 
   const handleCreate = async () => {
+    if (!formValid) return;
     setError('');
     try {
       await interviewsApi.create({
         ...form,
         plannedDate: new Date(form.plannedDate).toISOString(),
         comments: form.comments || null,
-        competencyIds: [],
       });
       setDialogOpen(false);
       load();
     } catch (e: any) {
-      setError(e.response?.data?.message || 'Ошибка создания');
+      setError(e.response?.data?.detail || e.response?.data?.message || 'Ошибка создания');
     }
   };
+
+  const selectedVacancy = vacancies.find((v) => v.id === form.vacancyId);
+  const vacancyCompetencyIds = selectedVacancy?.competencyIds || [];
+  const vacancyCompetencies = allCompetencies.filter((c) => vacancyCompetencyIds.includes(c.id));
 
   const formatDate = (d: string) => new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
@@ -141,6 +156,7 @@ export default function InterviewsPage() {
               <TableCell sx={{ fontWeight: 700 }}>Интервьюер</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Дата</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Статус</TableCell>
+              <TableCell sx={{ fontWeight: 700 }}>Решение</TableCell>
               <TableCell sx={{ fontWeight: 700 }} align="right">Действия</TableCell>
             </TableRow>
           </TableHead>
@@ -154,6 +170,13 @@ export default function InterviewsPage() {
                 <TableCell>
                   <Chip size="small" label={statusLabels[i.status]} color={statusColors[i.status] || 'default'} />
                 </TableCell>
+                <TableCell>
+                  <Chip
+                    size="small"
+                    label={decisionLabels[i.decision]}
+                    color={decisionColors[i.decision] || 'default'}
+                  />
+                </TableCell>
                 <TableCell align="right">
                   <Tooltip title="Открыть">
                     <IconButton size="small" onClick={(e) => { e.stopPropagation(); navigate(`/interviews/${i.id}`); }}>
@@ -165,7 +188,7 @@ export default function InterviewsPage() {
             ))}
             {interviews.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} align="center" sx={{ py: 4, color: 'text.secondary' }}>
+                <TableCell colSpan={7} align="center" sx={{ py: 4, color: 'text.secondary' }}>
                   Собеседования не найдены
                 </TableCell>
               </TableRow>
@@ -189,6 +212,18 @@ export default function InterviewsPage() {
                 <MenuItem key={v.id} value={v.id}>{v.title}</MenuItem>
               ))}
             </TextField>
+            {vacancyCompetencies.length > 0 && (
+              <Box sx={{ p: 1.5, bgcolor: '#F5F9FD', borderRadius: 1 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                  Компетенции вакансии (будут добавлены в матрицу):
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                  {vacancyCompetencies.map((c) => (
+                    <Chip key={c.id} size="small" label={`${c.name} (${c.category})`} color="primary" variant="outlined" />
+                  ))}
+                </Box>
+              </Box>
+            )}
             <TextField select label="Интервьюер *" value={form.interviewerId} onChange={(e) => setForm({ ...form, interviewerId: e.target.value })}>
               {users.filter((u) => u.isActive).map((u) => (
                 <MenuItem key={u.id} value={u.id}>{u.fullName}</MenuItem>
@@ -206,7 +241,7 @@ export default function InterviewsPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDialogOpen(false)}>Отмена</Button>
-          <Button variant="contained" onClick={handleCreate}>Создать</Button>
+          <Button variant="contained" disabled={!formValid} onClick={handleCreate}>Создать</Button>
         </DialogActions>
       </Dialog>
     </Box>

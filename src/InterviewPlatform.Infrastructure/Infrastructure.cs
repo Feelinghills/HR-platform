@@ -25,6 +25,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<Interview> Interviews => Set<Interview>();
     public DbSet<Competency> Competencies => Set<Competency>();
     public DbSet<CompetencyMatrix> CompetencyMatrices => Set<CompetencyMatrix>();
+    public DbSet<VacancyCompetency> VacancyCompetencies => Set<VacancyCompetency>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<OfferTemplate> OfferTemplates => Set<OfferTemplate>();
 
@@ -104,6 +105,21 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.Property(x => x.Category).HasMaxLength(128).IsRequired();
         });
 
+        modelBuilder.Entity<VacancyCompetency>(entity =>
+        {
+            entity.ToTable("vacancy_competencies");
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => new { x.VacancyId, x.CompetencyId }).IsUnique();
+            entity.HasOne(x => x.Vacancy)
+                .WithMany(x => x.VacancyCompetencies)
+                .HasForeignKey(x => x.VacancyId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(x => x.Competency)
+                .WithMany(x => x.VacancyCompetencies)
+                .HasForeignKey(x => x.CompetencyId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
         modelBuilder.Entity<CompetencyMatrix>(entity =>
         {
             entity.ToTable("competency_matrices");
@@ -175,6 +191,7 @@ public sealed class UnitOfWork(AppDbContext dbContext) : IUnitOfWork
     private IRepository<Interview>? _interviews;
     private IRepository<Competency>? _competencies;
     private IRepository<CompetencyMatrix>? _competencyMatrices;
+    private IRepository<VacancyCompetency>? _vacancyCompetencies;
     private IRepository<AuditLog>? _auditLogs;
     private IRepository<OfferTemplate>? _offerTemplates;
 
@@ -184,6 +201,7 @@ public sealed class UnitOfWork(AppDbContext dbContext) : IUnitOfWork
     public IRepository<Interview> Interviews => _interviews ??= new Repository<Interview>(dbContext);
     public IRepository<Competency> Competencies => _competencies ??= new Repository<Competency>(dbContext);
     public IRepository<CompetencyMatrix> CompetencyMatrices => _competencyMatrices ??= new Repository<CompetencyMatrix>(dbContext);
+    public IRepository<VacancyCompetency> VacancyCompetencies => _vacancyCompetencies ??= new Repository<VacancyCompetency>(dbContext);
     public IRepository<AuditLog> AuditLogs => _auditLogs ??= new Repository<AuditLog>(dbContext);
     public IRepository<OfferTemplate> OfferTemplates => _offerTemplates ??= new Repository<OfferTemplate>(dbContext);
 

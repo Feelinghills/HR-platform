@@ -16,31 +16,48 @@ import {
   Tooltip,
   LinearProgress,
   Collapse,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  OutlinedInput,
+  Checkbox,
+  ListItemText,
 } from '@mui/material';
 import { Add, Edit, ExpandMore, ExpandLess } from '@mui/icons-material';
 import { vacanciesApi } from '../api/vacancies';
+import { competenciesApi } from '../api/competencies';
 import { useAuth } from '../contexts/AuthContext';
-import { UserRole, type VacancyDto } from '../types';
+import { UserRole, type VacancyDto, type CompetencyDto } from '../types';
+import { required } from '../utils/validation';
 
 export default function VacanciesPage() {
   const { user } = useAuth();
   const [vacancies, setVacancies] = useState<VacancyDto[]>([]);
+  const [competencies, setCompetencies] = useState<CompetencyDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editItem, setEditItem] = useState<VacancyDto | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [error, setError] = useState('');
-  const [form, setForm] = useState({ title: '', description: '', requirements: '', isActive: true });
+  const [form, setForm] = useState<{ title: string; description: string; requirements: string; isActive: boolean; competencyIds: string[] }>({
+    title: '', description: '', requirements: '', isActive: true, competencyIds: [],
+  });
   const canEdit = user?.role === UserRole.Admin || user?.role === UserRole.HR;
+  const formValid = required(form.title) && required(form.description) && required(form.requirements);
 
   const load = () => {
     setLoading(true);
-    vacanciesApi.list(false).then((res) => setVacancies(res.data)).finally(() => setLoading(false));
+    Promise.all([
+      vacanciesApi.list(false).then((res) => setVacancies(res.data)),
+      competenciesApi.list(true).then((res) => setCompetencies(res.data)),
+    ]).finally(() => setLoading(false));
   };
 
   useEffect(() => { load(); }, []);
 
   const handleSave = async () => {
+    if (!formValid) return;
     setError('');
     try {
       if (editItem) {
@@ -50,24 +67,26 @@ export default function VacanciesPage() {
       }
       setDialogOpen(false);
       setEditItem(null);
-      setForm({ title: '', description: '', requirements: '', isActive: true });
+      setForm({ title: '', description: '', requirements: '', isActive: true, competencyIds: [] });
       load();
     } catch (e: any) {
-      setError(e.response?.data?.message || 'Ошибка сохранения');
+      setError(e.response?.data?.detail || e.response?.data?.message || 'Ошибка сохранения');
     }
   };
 
   const openEdit = (v: VacancyDto) => {
     setEditItem(v);
-    setForm({ title: v.title, description: v.description, requirements: v.requirements, isActive: v.isActive });
+    setForm({ title: v.title, description: v.description, requirements: v.requirements, isActive: v.isActive, competencyIds: v.competencyIds || [] });
     setDialogOpen(true);
   };
 
   const openCreate = () => {
     setEditItem(null);
-    setForm({ title: '', description: '', requirements: '', isActive: true });
+    setForm({ title: '', description: '', requirements: '', isActive: true, competencyIds: [] });
     setDialogOpen(true);
   };
+
+  const getCompetencyName = (id: string) => competencies.find((c) => c.id === id)?.name || id;
 
   return (
     <Box>
@@ -95,6 +114,13 @@ export default function VacanciesPage() {
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                     {v.description}
                   </Typography>
+                  {v.competencyIds && v.competencyIds.length > 0 && (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 1 }}>
+                      {v.competencyIds.map((cid) => (
+                        <Chip key={cid} size="small" label={getCompetencyName(cid)} color="primary" variant="outlined" />
+                      ))}
+                    </Box>
+                  )}
                   <IconButton size="small" onClick={() => setExpandedId(expandedId === v.id ? null : v.id)}>
                     {expandedId === v.id ? <ExpandLess /> : <ExpandMore />}
                     <Typography variant="caption" sx={{ ml: 0.5 }}>Требования</Typography>
@@ -127,11 +153,34 @@ export default function VacanciesPage() {
             <TextField label="Название *" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
             <TextField label="Описание *" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} multiline rows={3} />
             <TextField label="Требования *" value={form.requirements} onChange={(e) => setForm({ ...form, requirements: e.target.value })} multiline rows={3} />
+            <FormControl fullWidth>
+              <InputLabel>Компетенции</InputLabel>
+              <Select
+                multiple
+                value={form.competencyIds}
+                onChange={(e) => setForm({ ...form, competencyIds: e.target.value as string[] })}
+                input={<OutlinedInput label="Компетенции" />}
+                renderValue={(selected) => (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {(selected as string[]).map((id) => (
+                      <Chip key={id} size="small" label={getCompetencyName(id)} />
+                    ))}
+                  </Box>
+                )}
+              >
+                {competencies.map((c) => (
+                  <MenuItem key={c.id} value={c.id}>
+                    <Checkbox checked={form.competencyIds.indexOf(c.id) > -1} />
+                    <ListItemText primary={`${c.name} (${c.category})`} />
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
           </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDialogOpen(false)}>Отмена</Button>
-          <Button variant="contained" onClick={handleSave}>{editItem ? 'Сохранить' : 'Создать'}</Button>
+          <Button variant="contained" disabled={!formValid} onClick={handleSave}>{editItem ? 'Сохранить' : 'Создать'}</Button>
         </DialogActions>
       </Dialog>
     </Box>

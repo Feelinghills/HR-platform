@@ -25,6 +25,7 @@ import { Add, Edit } from '@mui/icons-material';
 import { competenciesApi } from '../api/competencies';
 import { useAuth } from '../contexts/AuthContext';
 import { UserRole, type CompetencyDto } from '../types';
+import { required } from '../utils/validation';
 
 export default function CompetenciesPage() {
   const { user } = useAuth();
@@ -35,6 +36,7 @@ export default function CompetenciesPage() {
   const [error, setError] = useState('');
   const [form, setForm] = useState({ name: '', description: '', category: '', maxScore: 5, isActive: true });
   const canEdit = user?.role === UserRole.Admin || user?.role === UserRole.HR;
+  const formValid = required(form.name) && required(form.description) && required(form.category) && form.maxScore >= 1 && form.maxScore <= 5;
 
   const load = () => {
     setLoading(true);
@@ -44,6 +46,7 @@ export default function CompetenciesPage() {
   useEffect(() => { load(); }, []);
 
   const handleSave = async () => {
+    if (!formValid) return;
     setError('');
     try {
       if (editItem) {
@@ -142,7 +145,7 @@ export default function CompetenciesPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDialogOpen(false)}>Отмена</Button>
-          <Button variant="contained" onClick={handleSave}>{editItem ? 'Сохранить' : 'Создать'}</Button>
+          <Button variant="contained" disabled={!formValid} onClick={handleSave}>{editItem ? 'Сохранить' : 'Создать'}</Button>
         </DialogActions>
       </Dialog>
     </Box>
