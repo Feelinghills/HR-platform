@@ -68,7 +68,6 @@ export default function InterviewsPage() {
     vacancyId: '',
     interviewerId: '',
     plannedDate: '',
-    comments: '',
   });
   const canEdit = user?.role === UserRole.Admin || user?.role === UserRole.HR;
 
@@ -94,7 +93,7 @@ export default function InterviewsPage() {
       setVacancies(v.data);
       setUsers(u.data);
       setAllCompetencies(comp.data);
-      setForm({ candidateId: '', vacancyId: '', interviewerId: '', plannedDate: '', comments: '' });
+      setForm({ candidateId: '', vacancyId: '', interviewerId: '', plannedDate: '' });
       setDialogOpen(true);
     });
   };
@@ -106,7 +105,7 @@ export default function InterviewsPage() {
       await interviewsApi.create({
         ...form,
         plannedDate: new Date(form.plannedDate).toISOString(),
-        comments: form.comments || null,
+        comments: null,
       });
       setDialogOpen(false);
       load();
@@ -232,7 +231,7 @@ export default function InterviewsPage() {
               </Box>
             )}
             <TextField select label="Интервьюер *" value={form.interviewerId} onChange={(e) => setForm({ ...form, interviewerId: e.target.value })}>
-              {users.filter((u) => u.isActive).map((u) => (
+              {users.filter((u) => u.isActive && u.role === UserRole.HR).map((u) => (
                 <MenuItem key={u.id} value={u.id}>{u.fullName}</MenuItem>
               ))}
             </TextField>
@@ -243,7 +242,6 @@ export default function InterviewsPage() {
               onChange={(e) => setForm({ ...form, plannedDate: e.target.value })}
               slotProps={{ inputLabel: { shrink: true } }}
             />
-            <TextField label="Комментарий" value={form.comments} onChange={(e) => setForm({ ...form, comments: e.target.value })} multiline rows={2} />
           </Box>
         </DialogContent>
         <DialogActions>

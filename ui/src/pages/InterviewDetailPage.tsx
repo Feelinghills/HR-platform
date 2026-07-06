@@ -54,6 +54,7 @@ export default function InterviewDetailPage() {
   const [matrixScores, setMatrixScores] = useState<Record<string, { score: number; comment: string }>>({});
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [interviewComment, setInterviewComment] = useState('');
 
   const canEditMatrix = (user?.role === UserRole.Admin || user?.role === UserRole.HR) && interview?.status === InterviewStatus.Planned;
   const canDecide = user?.role === UserRole.DecisionMaker;
@@ -63,6 +64,7 @@ export default function InterviewDetailPage() {
       interviewsApi.get(id)
         .then((res) => {
           setInterview(res.data);
+          setInterviewComment(res.data.comments || '');
           const scores: Record<string, { score: number; comment: string }> = {};
           res.data.matrix.forEach((m) => {
             scores[m.competencyId] = { score: m.score, comment: m.comment || '' };
@@ -85,7 +87,7 @@ export default function InterviewDetailPage() {
         comment: v.comment || null,
       }));
       await interviewsApi.upsertMatrix(id, { items });
-      const res = await interviewsApi.updateStatus(id, { status: InterviewStatus.Completed, comments: null });
+      const res = await interviewsApi.updateStatus(id, { status: InterviewStatus.Completed, comments: interviewComment || null });
       setInterview(res.data);
     } catch (e: any) {
       setError(e.response?.data?.message || 'Ошибка');
@@ -170,9 +172,18 @@ export default function InterviewDetailPage() {
                   <strong>Решение:</strong>{' '}
                   <Chip size="small" label={interview.status === InterviewStatus.Cancelled ? 'Без решения' : decisionLabels[interview.decision]} color={decisionColors[interview.decision]} />
                 </Typography>
-                {interview.comments && (
+                {canEditMatrix ? (
+                  <TextField
+                    label="Комментарий"
+                    value={interviewComment}
+                    onChange={(e) => setInterviewComment(e.target.value)}
+                    multiline
+                    rows={2}
+                    sx={{ mt: 1 }}
+                  />
+                ) : interview.comments ? (
                   <Typography><strong>Комментарий:</strong> {interview.comments}</Typography>
-                )}
+                ) : null}
               </Box>
             </CardContent>
           </Card>
