@@ -24,7 +24,7 @@ import {
   Checkbox,
   ListItemText,
 } from '@mui/material';
-import { Add, Edit, ExpandMore, ExpandLess } from '@mui/icons-material';
+import { Add, Edit, ExpandMore, ExpandLess, Archive, Delete } from '@mui/icons-material';
 import { vacanciesApi } from '../api/vacancies';
 import { competenciesApi } from '../api/competencies';
 import { useAuth } from '../contexts/AuthContext';
@@ -88,6 +88,18 @@ export default function VacanciesPage() {
 
   const getCompetencyName = (id: string) => competencies.find((c) => c.id === id)?.name || id;
 
+  const handleArchive = async (id: string) => {
+    if (!window.confirm('Архивировать вакансию?')) return;
+    await vacanciesApi.archive(id);
+    load();
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Вы уверены, что хотите удалить вакансию?')) return;
+    await vacanciesApi.delete(id, 'Удаление из списка');
+    load();
+  };
+
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -132,9 +144,17 @@ export default function VacanciesPage() {
                   </Collapse>
                 </Box>
                 {canEdit && (
-                  <Tooltip title="Редактировать">
-                    <IconButton onClick={() => openEdit(v)}><Edit /></IconButton>
-                  </Tooltip>
+                  <Box sx={{ display: 'flex', gap: 0.5 }}>
+                    <Tooltip title="Редактировать">
+                      <IconButton onClick={() => openEdit(v)}><Edit /></IconButton>
+                    </Tooltip>
+                    <Tooltip title="Архивировать">
+                      <IconButton color="warning" onClick={() => handleArchive(v.id)}><Archive /></IconButton>
+                    </Tooltip>
+                    <Tooltip title="Удалить">
+                      <IconButton color="error" onClick={() => handleDelete(v.id)}><Delete /></IconButton>
+                    </Tooltip>
+                  </Box>
                 )}
               </Box>
             </CardContent>

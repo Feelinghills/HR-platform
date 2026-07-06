@@ -21,7 +21,7 @@ import {
   Tooltip,
   LinearProgress,
 } from '@mui/material';
-import { Add, Edit } from '@mui/icons-material';
+import { Add, Edit, Archive, Delete } from '@mui/icons-material';
 import { competenciesApi } from '../api/competencies';
 import { useAuth } from '../contexts/AuthContext';
 import { UserRole, type CompetencyDto } from '../types';
@@ -77,6 +77,18 @@ export default function CompetenciesPage() {
 
   const categories = [...new Set(competencies.map((c) => c.category))];
 
+  const handleArchive = async (id: string) => {
+    if (!window.confirm('Архивировать компетенцию?')) return;
+    await competenciesApi.archive(id);
+    load();
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Вы уверены, что хотите удалить компетенцию?')) return;
+    await competenciesApi.delete(id, 'Удаление из списка');
+    load();
+  };
+
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -117,6 +129,12 @@ export default function CompetenciesPage() {
                       <TableCell align="right">
                         <Tooltip title="Редактировать">
                           <IconButton size="small" onClick={() => openEdit(c)}><Edit fontSize="small" /></IconButton>
+                        </Tooltip>
+                        <Tooltip title="Архивировать">
+                          <IconButton size="small" color="warning" onClick={() => handleArchive(c.id)}><Archive fontSize="small" /></IconButton>
+                        </Tooltip>
+                        <Tooltip title="Удалить">
+                          <IconButton size="small" color="error" onClick={() => handleDelete(c.id)}><Delete fontSize="small" /></IconButton>
                         </Tooltip>
                       </TableCell>
                     )}

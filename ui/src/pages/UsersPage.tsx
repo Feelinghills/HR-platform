@@ -22,7 +22,7 @@ import {
   Tooltip,
   LinearProgress,
 } from '@mui/material';
-import { Add, Block, CheckCircle } from '@mui/icons-material';
+import { Add, Delete } from '@mui/icons-material';
 import { usersApi } from '../api/users';
 import { UserRole, roleLabels, type UserDto } from '../types';
 import { required, isValidEmail } from '../utils/validation';
@@ -56,8 +56,9 @@ export default function UsersPage() {
     }
   };
 
-  const handleToggleStatus = async (id: string, isActive: boolean) => {
-    await usersApi.setStatus(id, !isActive);
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Вы уверены, что хотите удалить пользователя?')) return;
+    await usersApi.delete(id, 'Удаление из списка');
     load();
   };
 
@@ -101,13 +102,13 @@ export default function UsersPage() {
                   />
                 </TableCell>
                 <TableCell>
-                  <Chip size="small" label={u.isActive ? 'Активен' : 'Заблокирован'} color={u.isActive ? 'success' : 'error'} />
+                  <Chip size="small" label={u.isActive ? 'Активен' : 'Неактивен'} color={u.isActive ? 'success' : 'default'} />
                 </TableCell>
                 <TableCell>{new Date(u.createdAt).toLocaleDateString('ru-RU')}</TableCell>
                 <TableCell align="right">
-                  <Tooltip title={u.isActive ? 'Заблокировать' : 'Активировать'}>
-                    <IconButton size="small" onClick={() => handleToggleStatus(u.id, u.isActive)}>
-                      {u.isActive ? <Block fontSize="small" color="error" /> : <CheckCircle fontSize="small" color="success" />}
+                  <Tooltip title="Удалить">
+                    <IconButton size="small" color="error" onClick={() => handleDelete(u.id)}>
+                      <Delete fontSize="small" />
                     </IconButton>
                   </Tooltip>
                 </TableCell>
