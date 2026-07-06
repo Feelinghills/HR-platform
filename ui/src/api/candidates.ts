@@ -19,4 +19,13 @@ export const candidatesApi = {
   archive(id: string) {
     return apiClient.post(`/candidates/${id}/archive`);
   },
+  unarchive(id: string) {
+    return apiClient.post(`/candidates/${id}/unarchive`);
+  },
+  delete(id: string, reason?: string) {
+    return apiClient.post(`/candidates/${id}/delete`, { reason });
+  },
+  restore(id: string) {
+    return apiClient.post(`/candidates/${id}/restore`);
+  },
 };
