@@ -12,6 +12,7 @@ import InterviewsPage from './pages/InterviewsPage';
 import InterviewDetailPage from './pages/InterviewDetailPage';
 import CompetenciesPage from './pages/CompetenciesPage';
 import UsersPage from './pages/UsersPage';
+import AuditLogPage from './pages/AuditLogPage';
 import theme from './theme';
 
 export default function App() {
@@ -36,6 +37,7 @@ export default function App() {
               <Route path="/interviews/:id" element={<InterviewDetailPage />} />
               <Route path="/competencies" element={<CompetenciesPage />} />
               <Route path="/users" element={<UsersPage />} />
+              <Route path="/audit" element={<AuditLogPage />} />
             </Route>
           </Routes>
         </BrowserRouter>

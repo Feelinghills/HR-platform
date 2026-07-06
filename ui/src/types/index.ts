@@ -188,3 +188,32 @@ export const decisionColors: Record<InterviewDecision, 'default' | 'success' | '
   NextStage: 'info',
   TalentPool: 'warning',
 };
+
+export interface AuditLogDto {
+  id: string;
+  entityType: string;
+  entityId: string;
+  action: string;
+  oldValues: string | null;
+  newValues: string | null;
+  performedById: string | null;
+  performedByName: string | null;
+  performedAt: string;
+}
+
+export const entityTypeLabels: Record<string, string> = {
+  User: 'Пользователь',
+  Candidate: 'Кандидат',
+  Vacancy: 'Вакансия',
+  Interview: 'Собеседование',
+  Competency: 'Компетенция',
+};
+
+export const actionLabels: Record<string, string> = {
+  Create: 'Создание',
+  Update: 'Изменение',
+  Archive: 'Архивирование',
+  SetStatus: 'Изменение статуса',
+  Decide: 'Принятие решения',
+  UpsertMatrix: 'Обновление матрицы',
+};

@@ -3,6 +3,7 @@ using InterviewPlatform.Core;
 using InterviewPlatform.Domain.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace InterviewPlatform.API.Controllers;
 
@@ -254,5 +255,51 @@ internal static class ClaimsPrincipalExtensions
     {
         var value = principal.FindFirstValue(ClaimTypes.NameIdentifier);
         return Guid.TryParse(value, out var id) ? id : null;
+    }
+}
+
+[ApiController]
+[Authorize(Roles = "Admin,HR")]
+[Route("api/audit")]
+public sealed class AuditController(IUnitOfWork unitOfWork) : ControllerBase
+{
+    [HttpGet]
+    public async Task<ActionResult<IReadOnlyList<AuditLogDto>>> List(
+        [FromQuery] string? entityType,
+        [FromQuery] Guid? entityId,
+        CancellationToken cancellationToken)
+    {
+        var query = unitOfWork.AuditLogs.Query();
+
+        if (!string.IsNullOrEmpty(entityType))
+            query = query.Where(x => x.EntityType == entityType);
+
+        if (entityId.HasValue)
+            query = query.Where(x => x.EntityId == entityId.Value);
+
+        var logs = await query
+            .OrderByDescending(x => x.PerformedAt)
+            .Take(500)
+            .ToListAsync(cancellationToken);
+
+        var userIds = logs.Select(x => x.PerformedById).Where(x => x.HasValue).Select(x => x!.Value).Distinct().ToList();
+        var users = userIds.Count > 0
+            ? await unitOfWork.Users.Query().Where(x => userIds.Contains(x.Id)).ToListAsync(cancellationToken)
+            : [];
+        var userMap = users.ToDictionary(x => x.Id, x => x.FullName);
+
+        var result = logs.Select(x => new AuditLogDto(
+            x.Id,
+            x.EntityType,
+            x.EntityId,
+            x.Action,
+            x.OldValues,
+            x.NewValues,
+            x.PerformedById,
+            x.PerformedById.HasValue && userMap.TryGetValue(x.PerformedById.Value, out var name) ? name : null,
+            x.PerformedAt
+        )).ToList();
+
+        return Ok(result);
     }
 }

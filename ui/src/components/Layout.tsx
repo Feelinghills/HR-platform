@@ -27,6 +27,7 @@ import {
   AdminPanelSettings as AdminIcon,
   Logout as LogoutIcon,
   Person as PersonIcon,
+  History as HistoryIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { UserRole } from '../types';
@@ -114,6 +115,25 @@ export default function Layout() {
           >
             <ListItemIcon sx={{ minWidth: 40 }}><AdminIcon /></ListItemIcon>
             <ListItemText primary="Пользователи" />
+          </ListItemButton>
+        )}
+        {(user?.role === UserRole.Admin || user?.role === UserRole.HR) && (
+          <ListItemButton
+            selected={location.pathname === '/audit'}
+            onClick={() => { navigate('/audit'); setMobileOpen(false); }}
+            sx={{
+              borderRadius: 2,
+              mb: 0.5,
+              '&.Mui-selected': {
+                backgroundColor: 'primary.main',
+                color: 'white',
+                '& .MuiListItemIcon-root': { color: 'white' },
+                '&:hover': { backgroundColor: 'primary.dark' },
+              },
+            }}
+          >
+            <ListItemIcon sx={{ minWidth: 40 }}><HistoryIcon /></ListItemIcon>
+            <ListItemText primary="Журнал изменений" />
           </ListItemButton>
         )}
       </List>

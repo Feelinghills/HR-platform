@@ -152,6 +152,17 @@ public interface IAuditService
         CancellationToken cancellationToken = default);
 }
 
+public sealed record AuditLogDto(
+    Guid Id,
+    string EntityType,
+    Guid EntityId,
+    string Action,
+    string? OldValues,
+    string? NewValues,
+    Guid? PerformedById,
+    string? PerformedByName,
+    DateTime PerformedAt);
+
 public interface IPdfService
 {
     Task<byte[]> GenerateAsync(ReportDocument document, CancellationToken cancellationToken = default);
