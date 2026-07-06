@@ -75,6 +75,7 @@ public sealed class AuthService(
     public Task<IReadOnlyList<UserDto>> ListUsersAsync(CancellationToken cancellationToken = default)
     {
         var users = unitOfWork.Users.Query()
+            .Where(x => !x.IsDeleted)
             .OrderBy(x => x.FullName)
             .Select(x => Map(x))
             .ToList();
@@ -97,6 +98,34 @@ public sealed class AuthService(
         return Map(user);
     }
 
+    public async Task DeleteUserAsync(Guid id, Guid? performedById, string? reason, CancellationToken cancellationToken = default)
+    {
+        var user = await unitOfWork.Users.GetByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException("Пользователь не найден.");
+        if (user.IsDeleted) throw new BusinessException("Пользователь уже удалён.");
+        user.IsDeleted = true;
+        user.DeletedAt = DateTime.UtcNow;
+        user.DeletedById = performedById;
+        user.DeletedReason = reason;
+        unitOfWork.Users.Update(user);
+        await auditService.LogAsync("User", id, "SoftDelete", null, new { user.IsDeleted, reason }, performedById, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task RestoreUserAsync(Guid id, Guid? performedById, CancellationToken cancellationToken = default)
+    {
+        var user = await unitOfWork.Users.GetByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException("Пользователь не найден.");
+        if (!user.IsDeleted) throw new BusinessException("Пользователь не удалён.");
+        user.IsDeleted = false;
+        user.DeletedAt = null;
+        user.DeletedById = null;
+        user.DeletedReason = null;
+        unitOfWork.Users.Update(user);
+        await auditService.LogAsync("User", id, "Restore", null, new { user.IsDeleted }, performedById, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
     private static string NormalizeEmail(string email) => email.Trim().ToLowerInvariant();
 
     private static UserDto Map(User user) => new(
@@ -112,7 +141,7 @@ public sealed class CandidateService(IUnitOfWork unitOfWork, IAuditService audit
 {
     public Task<IReadOnlyList<CandidateDto>> ListAsync(string? search, bool includeArchived, CancellationToken cancellationToken = default)
     {
-        var query = unitOfWork.Candidates.Query();
+        var query = unitOfWork.Candidates.Query().Where(x => !x.IsDeleted);
 
         if (!includeArchived)
         {
@@ -199,10 +228,68 @@ public sealed class CandidateService(IUnitOfWork unitOfWork, IAuditService audit
     {
         var candidate = await unitOfWork.Candidates.GetByIdAsync(id, cancellationToken)
             ?? throw new NotFoundException("Кандидат не найден.");
+        if (candidate.IsArchived) throw new BusinessException("Кандидат уже в архиве.");
 
         candidate.IsArchived = true;
+        candidate.ArchivedAt = DateTime.UtcNow;
+        candidate.ArchivedById = performedById;
         unitOfWork.Candidates.Update(candidate);
         await auditService.LogAsync("Candidate", id, "Archive", null, new { candidate.IsArchived }, performedById, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task UnarchiveAsync(Guid id, Guid? performedById, CancellationToken cancellationToken = default)
+    {
+        var candidate = await unitOfWork.Candidates.GetByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException("Кандидат не найден.");
+        if (!candidate.IsArchived) throw new BusinessException("Кандидат не в архиве.");
+
+        candidate.IsArchived = false;
+        candidate.ArchivedAt = null;
+        candidate.ArchivedById = null;
+        candidate.ArchivedReason = null;
+        unitOfWork.Candidates.Update(candidate);
+        await auditService.LogAsync("Candidate", id, "Unarchive", null, new { candidate.IsArchived }, performedById, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task DeleteAsync(Guid id, Guid? performedById, string? reason, CancellationToken cancellationToken = default)
+    {
+        var candidate = await unitOfWork.Candidates.GetByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException("Кандидат не найден.");
+        if (candidate.IsDeleted) throw new BusinessException("Кандидат уже удалён.");
+
+        candidate.IsDeleted = true;
+        candidate.DeletedAt = DateTime.UtcNow;
+        candidate.DeletedById = performedById;
+        candidate.DeletedReason = reason;
+        unitOfWork.Candidates.Update(candidate);
+        await auditService.LogAsync("Candidate", id, "SoftDelete", null, new { candidate.IsDeleted, reason }, performedById, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task RestoreAsync(Guid id, Guid? performedById, CancellationToken cancellationToken = default)
+    {
+        var candidate = await unitOfWork.Candidates.GetByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException("Кандидат не найден.");
+        if (!candidate.IsDeleted && !candidate.IsArchived) throw new BusinessException("Кандидат не удалён и не в архиве.");
+
+        if (candidate.IsDeleted)
+        {
+            candidate.IsDeleted = false;
+            candidate.DeletedAt = null;
+            candidate.DeletedById = null;
+            candidate.DeletedReason = null;
+        }
+        if (candidate.IsArchived)
+        {
+            candidate.IsArchived = false;
+            candidate.ArchivedAt = null;
+            candidate.ArchivedById = null;
+            candidate.ArchivedReason = null;
+        }
+        unitOfWork.Candidates.Update(candidate);
+        await auditService.LogAsync("Candidate", id, "Restore", null, new { candidate.IsDeleted, candidate.IsArchived }, performedById, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
@@ -223,9 +310,14 @@ public sealed class CandidateService(IUnitOfWork unitOfWork, IAuditService audit
 
 public sealed class VacancyService(IUnitOfWork unitOfWork, IAuditService auditService) : IVacancyService
 {
-    public Task<IReadOnlyList<VacancyDto>> ListAsync(bool activeOnly, CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<VacancyDto>> ListAsync(bool activeOnly, bool includeArchived = false, CancellationToken cancellationToken = default)
     {
-        var query = unitOfWork.Vacancies.Query();
+        var query = unitOfWork.Vacancies.Query().Where(x => !x.IsDeleted);
+
+        if (!includeArchived)
+        {
+            query = query.Where(x => !x.IsArchived);
+        }
 
         if (activeOnly)
         {
@@ -337,6 +429,71 @@ public sealed class VacancyService(IUnitOfWork unitOfWork, IAuditService auditSe
         return await GetAsync(id, cancellationToken);
     }
 
+    public async Task ArchiveAsync(Guid id, Guid? performedById, CancellationToken cancellationToken = default)
+    {
+        var vacancy = await unitOfWork.Vacancies.GetByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException("Вакансия не найдена.");
+        if (vacancy.IsArchived) throw new BusinessException("Вакансия уже в архиве.");
+        vacancy.IsArchived = true;
+        vacancy.ArchivedAt = DateTime.UtcNow;
+        vacancy.ArchivedById = performedById;
+        unitOfWork.Vacancies.Update(vacancy);
+        await auditService.LogAsync("Vacancy", id, "Archive", null, new { vacancy.IsArchived }, performedById, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task UnarchiveAsync(Guid id, Guid? performedById, CancellationToken cancellationToken = default)
+    {
+        var vacancy = await unitOfWork.Vacancies.GetByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException("Вакансия не найдена.");
+        if (!vacancy.IsArchived) throw new BusinessException("Вакансия не в архиве.");
+        vacancy.IsArchived = false;
+        vacancy.ArchivedAt = null;
+        vacancy.ArchivedById = null;
+        vacancy.ArchivedReason = null;
+        unitOfWork.Vacancies.Update(vacancy);
+        await auditService.LogAsync("Vacancy", id, "Unarchive", null, new { vacancy.IsArchived }, performedById, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task DeleteAsync(Guid id, Guid? performedById, string? reason, CancellationToken cancellationToken = default)
+    {
+        var vacancy = await unitOfWork.Vacancies.GetByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException("Вакансия не найдена.");
+        if (vacancy.IsDeleted) throw new BusinessException("Вакансия уже удалена.");
+        vacancy.IsDeleted = true;
+        vacancy.DeletedAt = DateTime.UtcNow;
+        vacancy.DeletedById = performedById;
+        vacancy.DeletedReason = reason;
+        unitOfWork.Vacancies.Update(vacancy);
+        await auditService.LogAsync("Vacancy", id, "SoftDelete", null, new { vacancy.IsDeleted, reason }, performedById, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task RestoreAsync(Guid id, Guid? performedById, CancellationToken cancellationToken = default)
+    {
+        var vacancy = await unitOfWork.Vacancies.GetByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException("Вакансия не найдена.");
+        if (!vacancy.IsDeleted && !vacancy.IsArchived) throw new BusinessException("Вакансия не удалена и не в архиве.");
+        if (vacancy.IsDeleted)
+        {
+            vacancy.IsDeleted = false;
+            vacancy.DeletedAt = null;
+            vacancy.DeletedById = null;
+            vacancy.DeletedReason = null;
+        }
+        if (vacancy.IsArchived)
+        {
+            vacancy.IsArchived = false;
+            vacancy.ArchivedAt = null;
+            vacancy.ArchivedById = null;
+            vacancy.ArchivedReason = null;
+        }
+        unitOfWork.Vacancies.Update(vacancy);
+        await auditService.LogAsync("Vacancy", id, "Restore", null, new { vacancy.IsDeleted, vacancy.IsArchived }, performedById, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
     private static VacancyDto Map(Vacancy vacancy, List<VacancyCompetency>? links = null)
     {
         var competencyIds = links?.Where(vc => vc.VacancyId == vacancy.Id).Select(vc => vc.CompetencyId).ToList()
@@ -348,15 +505,22 @@ public sealed class VacancyService(IUnitOfWork unitOfWork, IAuditService auditSe
             vacancy.Requirements,
             vacancy.IsActive,
             vacancy.CreatedAt,
-            competencyIds);
+            competencyIds,
+            vacancy.IsArchived,
+            vacancy.IsDeleted);
     }
 }
 
 public sealed class CompetencyService(IUnitOfWork unitOfWork, IAuditService auditService) : ICompetencyService
 {
-    public Task<IReadOnlyList<CompetencyDto>> ListAsync(bool activeOnly, CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<CompetencyDto>> ListAsync(bool activeOnly, bool includeArchived = false, CancellationToken cancellationToken = default)
     {
-        var query = unitOfWork.Competencies.Query();
+        var query = unitOfWork.Competencies.Query().Where(x => !x.IsDeleted);
+
+        if (!includeArchived)
+        {
+            query = query.Where(x => !x.IsArchived);
+        }
 
         if (activeOnly)
         {
@@ -425,6 +589,71 @@ public sealed class CompetencyService(IUnitOfWork unitOfWork, IAuditService audi
         return Map(competency);
     }
 
+    public async Task ArchiveAsync(Guid id, Guid? performedById, CancellationToken cancellationToken = default)
+    {
+        var c = await unitOfWork.Competencies.GetByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException("Компетенция не найдена.");
+        if (c.IsArchived) throw new BusinessException("Компетенция уже в архиве.");
+        c.IsArchived = true;
+        c.ArchivedAt = DateTime.UtcNow;
+        c.ArchivedById = performedById;
+        unitOfWork.Competencies.Update(c);
+        await auditService.LogAsync("Competency", id, "Archive", null, new { c.IsArchived }, performedById, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task UnarchiveAsync(Guid id, Guid? performedById, CancellationToken cancellationToken = default)
+    {
+        var c = await unitOfWork.Competencies.GetByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException("Компетенция не найдена.");
+        if (!c.IsArchived) throw new BusinessException("Компетенция не в архиве.");
+        c.IsArchived = false;
+        c.ArchivedAt = null;
+        c.ArchivedById = null;
+        c.ArchivedReason = null;
+        unitOfWork.Competencies.Update(c);
+        await auditService.LogAsync("Competency", id, "Unarchive", null, new { c.IsArchived }, performedById, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task DeleteAsync(Guid id, Guid? performedById, string? reason, CancellationToken cancellationToken = default)
+    {
+        var c = await unitOfWork.Competencies.GetByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException("Компетенция не найдена.");
+        if (c.IsDeleted) throw new BusinessException("Компетенция уже удалена.");
+        c.IsDeleted = true;
+        c.DeletedAt = DateTime.UtcNow;
+        c.DeletedById = performedById;
+        c.DeletedReason = reason;
+        unitOfWork.Competencies.Update(c);
+        await auditService.LogAsync("Competency", id, "SoftDelete", null, new { c.IsDeleted, reason }, performedById, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task RestoreAsync(Guid id, Guid? performedById, CancellationToken cancellationToken = default)
+    {
+        var c = await unitOfWork.Competencies.GetByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException("Компетенция не найдена.");
+        if (!c.IsDeleted && !c.IsArchived) throw new BusinessException("Компетенция не удалена и не в архиве.");
+        if (c.IsDeleted)
+        {
+            c.IsDeleted = false;
+            c.DeletedAt = null;
+            c.DeletedById = null;
+            c.DeletedReason = null;
+        }
+        if (c.IsArchived)
+        {
+            c.IsArchived = false;
+            c.ArchivedAt = null;
+            c.ArchivedById = null;
+            c.ArchivedReason = null;
+        }
+        unitOfWork.Competencies.Update(c);
+        await auditService.LogAsync("Competency", id, "Restore", null, new { c.IsDeleted, c.IsArchived }, performedById, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
     private static void EnsureValidScore(int maxScore)
     {
         if (maxScore <= 0 || maxScore > 5)
@@ -439,7 +668,9 @@ public sealed class CompetencyService(IUnitOfWork unitOfWork, IAuditService audi
         competency.Description,
         competency.Category,
         competency.MaxScore,
-        competency.IsActive);
+        competency.IsActive,
+        competency.IsArchived,
+        competency.IsDeleted);
 }
 
 public sealed class InterviewService(IUnitOfWork unitOfWork, IAuditService auditService) : IInterviewService

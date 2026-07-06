@@ -41,6 +41,12 @@ public sealed class User
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    public bool IsDeleted { get; set; }
+    public DateTime? DeletedAt { get; set; }
+    public Guid? DeletedById { get; set; }
+    public User? DeletedBy { get; set; }
+    public string? DeletedReason { get; set; }
+
     public ICollection<Candidate> CreatedCandidates { get; set; } = new List<Candidate>();
     public ICollection<Interview> Interviews { get; set; } = new List<Interview>();
     public ICollection<CompetencyMatrix> Evaluations { get; set; } = new List<CompetencyMatrix>();
@@ -55,6 +61,18 @@ public sealed class Vacancy
     public string Requirements { get; set; } = string.Empty;
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public bool IsArchived { get; set; }
+    public DateTime? ArchivedAt { get; set; }
+    public Guid? ArchivedById { get; set; }
+    public User? ArchivedBy { get; set; }
+    public string? ArchivedReason { get; set; }
+
+    public bool IsDeleted { get; set; }
+    public DateTime? DeletedAt { get; set; }
+    public Guid? DeletedById { get; set; }
+    public User? DeletedBy { get; set; }
+    public string? DeletedReason { get; set; }
 
     public ICollection<VacancyCompetency> VacancyCompetencies { get; set; } = new List<VacancyCompetency>();
     public ICollection<Interview> Interviews { get; set; } = new List<Interview>();
@@ -114,6 +132,18 @@ public sealed class Competency
     public string Category { get; set; } = string.Empty;
     public int MaxScore { get; set; } = 5;
     public bool IsActive { get; set; } = true;
+
+    public bool IsArchived { get; set; }
+    public DateTime? ArchivedAt { get; set; }
+    public Guid? ArchivedById { get; set; }
+    public User? ArchivedBy { get; set; }
+    public string? ArchivedReason { get; set; }
+
+    public bool IsDeleted { get; set; }
+    public DateTime? DeletedAt { get; set; }
+    public Guid? DeletedById { get; set; }
+    public User? DeletedBy { get; set; }
+    public string? DeletedReason { get; set; }
 
     public ICollection<VacancyCompetency> VacancyCompetencies { get; set; } = new List<VacancyCompetency>();
     public ICollection<CompetencyMatrix> Matrices { get; set; } = new List<CompetencyMatrix>();

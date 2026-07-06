@@ -70,6 +70,8 @@ export interface VacancyDto {
   isActive: boolean;
   createdAt: string;
   competencyIds: string[];
+  isArchived: boolean;
+  isDeleted: boolean;
 }
 
 export interface CreateVacancyRequest {
@@ -95,6 +97,8 @@ export interface CompetencyDto {
   category: string;
   maxScore: number;
   isActive: boolean;
+  isArchived: boolean;
+  isDeleted: boolean;
 }
 
 export interface CreateCompetencyRequest {
@@ -213,6 +217,9 @@ export const actionLabels: Record<string, string> = {
   Create: 'Создание',
   Update: 'Изменение',
   Archive: 'Архивирование',
+  Unarchive: 'Из архива',
+  SoftDelete: 'Удаление',
+  Restore: 'Восстановление',
   SetStatus: 'Изменение статуса',
   Decide: 'Принятие решения',
   UpsertMatrix: 'Обновление матрицы',

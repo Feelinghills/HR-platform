@@ -28,6 +28,7 @@ import {
   Logout as LogoutIcon,
   Person as PersonIcon,
   History as HistoryIcon,
+  Archive as ArchiveIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { UserRole } from '../types';
@@ -40,6 +41,7 @@ const navItems = [
   { label: 'Вакансии', path: '/vacancies', icon: <WorkIcon /> },
   { label: 'Собеседования', path: '/interviews', icon: <EventIcon /> },
   { label: 'Компетенции', path: '/competencies', icon: <PsychologyIcon /> },
+  { label: 'Архив', path: '/archive', icon: <ArchiveIcon /> },
 ];
 
 const roleColors: Record<string, string> = {

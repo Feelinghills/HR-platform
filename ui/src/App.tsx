@@ -13,6 +13,7 @@ import InterviewDetailPage from './pages/InterviewDetailPage';
 import CompetenciesPage from './pages/CompetenciesPage';
 import UsersPage from './pages/UsersPage';
 import AuditLogPage from './pages/AuditLogPage';
+import ArchivePage from './pages/ArchivePage';
 import theme from './theme';
 
 export default function App() {
@@ -38,6 +39,7 @@ export default function App() {
               <Route path="/competencies" element={<CompetenciesPage />} />
               <Route path="/users" element={<UsersPage />} />
               <Route path="/audit" element={<AuditLogPage />} />
+              <Route path="/archive" element={<ArchivePage />} />
             </Route>
           </Routes>
         </BrowserRouter>

@@ -47,13 +47,13 @@ public sealed record UpdateCandidateRequest(
     string Skills,
     bool IsArchived);
 
-public sealed record VacancyDto(Guid Id, string Title, string Description, string Requirements, bool IsActive, DateTime CreatedAt, IReadOnlyList<Guid> CompetencyIds);
+public sealed record VacancyDto(Guid Id, string Title, string Description, string Requirements, bool IsActive, DateTime CreatedAt, IReadOnlyList<Guid> CompetencyIds, bool IsArchived, bool IsDeleted);
 
 public sealed record CreateVacancyRequest(string Title, string Description, string Requirements, bool IsActive = true, IReadOnlyList<Guid>? CompetencyIds = null);
 
 public sealed record UpdateVacancyRequest(string Title, string Description, string Requirements, bool IsActive, IReadOnlyList<Guid>? CompetencyIds = null);
 
-public sealed record CompetencyDto(Guid Id, string Name, string Description, string Category, int MaxScore, bool IsActive);
+public sealed record CompetencyDto(Guid Id, string Name, string Description, string Category, int MaxScore, bool IsActive, bool IsArchived, bool IsDeleted);
 
 public sealed record CreateCompetencyRequest(string Name, string Description, string Category, int MaxScore = 5, bool IsActive = true);
 
@@ -99,6 +99,8 @@ public sealed record CreateInterviewRequest(
 public sealed record UpdateInterviewStatusRequest(InterviewStatus Status, string? Comments);
 
 public sealed record DecideInterviewRequest(InterviewDecision Decision, string? Comments);
+
+public sealed record DeleteRequest(string? Reason);
 
 public sealed record ReportSection(string Title, IReadOnlyList<string> Lines);
 
@@ -174,6 +176,8 @@ public interface IAuthService
     Task<UserDto> CreateUserAsync(RegisterUserRequest request, Guid? performedById, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<UserDto>> ListUsersAsync(CancellationToken cancellationToken = default);
     Task<UserDto> SetUserStatusAsync(Guid id, bool isActive, Guid? performedById, CancellationToken cancellationToken = default);
+    Task DeleteUserAsync(Guid id, Guid? performedById, string? reason, CancellationToken cancellationToken = default);
+    Task RestoreUserAsync(Guid id, Guid? performedById, CancellationToken cancellationToken = default);
 }
 
 public interface ICandidateService
@@ -183,22 +187,33 @@ public interface ICandidateService
     Task<CandidateDto> CreateAsync(CreateCandidateRequest request, Guid? createdById, CancellationToken cancellationToken = default);
     Task<CandidateDto> UpdateAsync(Guid id, UpdateCandidateRequest request, Guid? performedById, CancellationToken cancellationToken = default);
     Task ArchiveAsync(Guid id, Guid? performedById, CancellationToken cancellationToken = default);
+    Task UnarchiveAsync(Guid id, Guid? performedById, CancellationToken cancellationToken = default);
+    Task DeleteAsync(Guid id, Guid? performedById, string? reason, CancellationToken cancellationToken = default);
+    Task RestoreAsync(Guid id, Guid? performedById, CancellationToken cancellationToken = default);
 }
 
 public interface IVacancyService
 {
-    Task<IReadOnlyList<VacancyDto>> ListAsync(bool activeOnly, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<VacancyDto>> ListAsync(bool activeOnly, bool includeArchived = false, CancellationToken cancellationToken = default);
     Task<VacancyDto> GetAsync(Guid id, CancellationToken cancellationToken = default);
     Task<VacancyDto> CreateAsync(CreateVacancyRequest request, Guid? performedById, CancellationToken cancellationToken = default);
     Task<VacancyDto> UpdateAsync(Guid id, UpdateVacancyRequest request, Guid? performedById, CancellationToken cancellationToken = default);
+    Task ArchiveAsync(Guid id, Guid? performedById, CancellationToken cancellationToken = default);
+    Task UnarchiveAsync(Guid id, Guid? performedById, CancellationToken cancellationToken = default);
+    Task DeleteAsync(Guid id, Guid? performedById, string? reason, CancellationToken cancellationToken = default);
+    Task RestoreAsync(Guid id, Guid? performedById, CancellationToken cancellationToken = default);
 }
 
 public interface ICompetencyService
 {
-    Task<IReadOnlyList<CompetencyDto>> ListAsync(bool activeOnly, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<CompetencyDto>> ListAsync(bool activeOnly, bool includeArchived = false, CancellationToken cancellationToken = default);
     Task<CompetencyDto> GetAsync(Guid id, CancellationToken cancellationToken = default);
     Task<CompetencyDto> CreateAsync(CreateCompetencyRequest request, Guid? performedById, CancellationToken cancellationToken = default);
     Task<CompetencyDto> UpdateAsync(Guid id, UpdateCompetencyRequest request, Guid? performedById, CancellationToken cancellationToken = default);
+    Task ArchiveAsync(Guid id, Guid? performedById, CancellationToken cancellationToken = default);
+    Task UnarchiveAsync(Guid id, Guid? performedById, CancellationToken cancellationToken = default);
+    Task DeleteAsync(Guid id, Guid? performedById, string? reason, CancellationToken cancellationToken = default);
+    Task RestoreAsync(Guid id, Guid? performedById, CancellationToken cancellationToken = default);
 }
 
 public interface IInterviewService

@@ -58,6 +58,22 @@ public sealed class UsersController(IAuthService authService) : ControllerBase
     {
         return Ok(await authService.SetUserStatusAsync(id, request.IsActive, User.GetUserId(), cancellationToken));
     }
+
+    [Authorize(Roles = "Admin")]
+    [HttpPost("{id:guid}/delete")]
+    public async Task<IActionResult> Delete(Guid id, DeleteRequest request, CancellationToken cancellationToken)
+    {
+        await authService.DeleteUserAsync(id, User.GetUserId(), request.Reason, cancellationToken);
+        return NoContent();
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpPost("{id:guid}/restore")]
+    public async Task<IActionResult> Restore(Guid id, CancellationToken cancellationToken)
+    {
+        await authService.RestoreUserAsync(id, User.GetUserId(), cancellationToken);
+        return NoContent();
+    }
 }
 
 [ApiController]
@@ -102,6 +118,30 @@ public sealed class CandidatesController(ICandidateService candidateService) : C
         await candidateService.ArchiveAsync(id, User.GetUserId(), cancellationToken);
         return NoContent();
     }
+
+    [Authorize(Roles = "Admin,HR")]
+    [HttpPost("{id:guid}/unarchive")]
+    public async Task<IActionResult> Unarchive(Guid id, CancellationToken cancellationToken)
+    {
+        await candidateService.UnarchiveAsync(id, User.GetUserId(), cancellationToken);
+        return NoContent();
+    }
+
+    [Authorize(Roles = "Admin,HR")]
+    [HttpPost("{id:guid}/delete")]
+    public async Task<IActionResult> Delete(Guid id, DeleteRequest request, CancellationToken cancellationToken)
+    {
+        await candidateService.DeleteAsync(id, User.GetUserId(), request.Reason, cancellationToken);
+        return NoContent();
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpPost("{id:guid}/restore")]
+    public async Task<IActionResult> Restore(Guid id, CancellationToken cancellationToken)
+    {
+        await candidateService.RestoreAsync(id, User.GetUserId(), cancellationToken);
+        return NoContent();
+    }
 }
 
 [ApiController]
@@ -110,9 +150,12 @@ public sealed class CandidatesController(ICandidateService candidateService) : C
 public sealed class VacanciesController(IVacancyService vacancyService) : ControllerBase
 {
     [HttpGet]
-    public async Task<ActionResult<IReadOnlyList<VacancyDto>>> List([FromQuery] bool activeOnly = true, CancellationToken cancellationToken = default)
+    public async Task<ActionResult<IReadOnlyList<VacancyDto>>> List(
+        [FromQuery] bool activeOnly = true,
+        [FromQuery] bool includeArchived = false,
+        CancellationToken cancellationToken = default)
     {
-        return Ok(await vacancyService.ListAsync(activeOnly, cancellationToken));
+        return Ok(await vacancyService.ListAsync(activeOnly, includeArchived, cancellationToken));
     }
 
     [HttpGet("{id:guid}")]
@@ -135,6 +178,38 @@ public sealed class VacanciesController(IVacancyService vacancyService) : Contro
     {
         return Ok(await vacancyService.UpdateAsync(id, request, User.GetUserId(), cancellationToken));
     }
+
+    [Authorize(Roles = "Admin,HR")]
+    [HttpPost("{id:guid}/archive")]
+    public async Task<IActionResult> Archive(Guid id, CancellationToken cancellationToken)
+    {
+        await vacancyService.ArchiveAsync(id, User.GetUserId(), cancellationToken);
+        return NoContent();
+    }
+
+    [Authorize(Roles = "Admin,HR")]
+    [HttpPost("{id:guid}/unarchive")]
+    public async Task<IActionResult> Unarchive(Guid id, CancellationToken cancellationToken)
+    {
+        await vacancyService.UnarchiveAsync(id, User.GetUserId(), cancellationToken);
+        return NoContent();
+    }
+
+    [Authorize(Roles = "Admin,HR")]
+    [HttpPost("{id:guid}/delete")]
+    public async Task<IActionResult> Delete(Guid id, DeleteRequest request, CancellationToken cancellationToken)
+    {
+        await vacancyService.DeleteAsync(id, User.GetUserId(), request.Reason, cancellationToken);
+        return NoContent();
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpPost("{id:guid}/restore")]
+    public async Task<IActionResult> Restore(Guid id, CancellationToken cancellationToken)
+    {
+        await vacancyService.RestoreAsync(id, User.GetUserId(), cancellationToken);
+        return NoContent();
+    }
 }
 
 [ApiController]
@@ -143,9 +218,12 @@ public sealed class VacanciesController(IVacancyService vacancyService) : Contro
 public sealed class CompetenciesController(ICompetencyService competencyService) : ControllerBase
 {
     [HttpGet]
-    public async Task<ActionResult<IReadOnlyList<CompetencyDto>>> List([FromQuery] bool activeOnly = true, CancellationToken cancellationToken = default)
+    public async Task<ActionResult<IReadOnlyList<CompetencyDto>>> List(
+        [FromQuery] bool activeOnly = true,
+        [FromQuery] bool includeArchived = false,
+        CancellationToken cancellationToken = default)
     {
-        return Ok(await competencyService.ListAsync(activeOnly, cancellationToken));
+        return Ok(await competencyService.ListAsync(activeOnly, includeArchived, cancellationToken));
     }
 
     [HttpGet("{id:guid}")]
@@ -167,6 +245,38 @@ public sealed class CompetenciesController(ICompetencyService competencyService)
     public async Task<ActionResult<CompetencyDto>> Update(Guid id, UpdateCompetencyRequest request, CancellationToken cancellationToken)
     {
         return Ok(await competencyService.UpdateAsync(id, request, User.GetUserId(), cancellationToken));
+    }
+
+    [Authorize(Roles = "Admin,HR")]
+    [HttpPost("{id:guid}/archive")]
+    public async Task<IActionResult> Archive(Guid id, CancellationToken cancellationToken)
+    {
+        await competencyService.ArchiveAsync(id, User.GetUserId(), cancellationToken);
+        return NoContent();
+    }
+
+    [Authorize(Roles = "Admin,HR")]
+    [HttpPost("{id:guid}/unarchive")]
+    public async Task<IActionResult> Unarchive(Guid id, CancellationToken cancellationToken)
+    {
+        await competencyService.UnarchiveAsync(id, User.GetUserId(), cancellationToken);
+        return NoContent();
+    }
+
+    [Authorize(Roles = "Admin,HR")]
+    [HttpPost("{id:guid}/delete")]
+    public async Task<IActionResult> Delete(Guid id, DeleteRequest request, CancellationToken cancellationToken)
+    {
+        await competencyService.DeleteAsync(id, User.GetUserId(), request.Reason, cancellationToken);
+        return NoContent();
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpPost("{id:guid}/restore")]
+    public async Task<IActionResult> Restore(Guid id, CancellationToken cancellationToken)
+    {
+        await competencyService.RestoreAsync(id, User.GetUserId(), cancellationToken);
+        return NoContent();
     }
 }
 

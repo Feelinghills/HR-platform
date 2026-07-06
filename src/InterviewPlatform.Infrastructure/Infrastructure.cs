@@ -40,6 +40,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.Property(x => x.PasswordHash).HasMaxLength(512).IsRequired();
             entity.Property(x => x.FullName).HasMaxLength(256).IsRequired();
             entity.Property(x => x.Role).HasConversion<string>().HasMaxLength(32).IsRequired();
+            entity.HasOne(x => x.DeletedBy).WithMany().HasForeignKey(x => x.DeletedById).OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<Candidate>(entity =>
@@ -80,6 +81,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.Property(x => x.Title).HasMaxLength(256).IsRequired();
             entity.Property(x => x.Description).HasMaxLength(2048).IsRequired();
             entity.Property(x => x.Requirements).HasMaxLength(2048).IsRequired();
+            entity.HasOne(x => x.ArchivedBy).WithMany().HasForeignKey(x => x.ArchivedById).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(x => x.DeletedBy).WithMany().HasForeignKey(x => x.DeletedById).OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<Interview>(entity =>
@@ -113,6 +116,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.Property(x => x.Name).HasMaxLength(128).IsRequired();
             entity.Property(x => x.Description).HasMaxLength(1024).IsRequired();
             entity.Property(x => x.Category).HasMaxLength(128).IsRequired();
+            entity.HasOne(x => x.ArchivedBy).WithMany().HasForeignKey(x => x.ArchivedById).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(x => x.DeletedBy).WithMany().HasForeignKey(x => x.DeletedById).OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<VacancyCompetency>(entity =>

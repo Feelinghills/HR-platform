@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -19,12 +19,15 @@ import {
   DialogContent,
   DialogActions,
   Alert,
-  Switch,
-  FormControlLabel,
   Tooltip,
   LinearProgress,
+  Popover,
+  Checkbox,
+  FormGroup,
+  FormControlLabel,
+  Divider,
 } from '@mui/material';
-import { Add, Archive, Visibility } from '@mui/icons-material';
+import { Add, Archive, Visibility, FilterList, Search, Clear, Delete } from '@mui/icons-material';
 import { candidatesApi } from '../api/candidates';
 import { useAuth } from '../contexts/AuthContext';
 import { UserRole, type CandidateDto } from '../types';
@@ -54,30 +57,70 @@ function useCandidateValid(form: typeof emptyCandidate) {
   );
 }
 
+const statusOptions = [
+  { key: 'active', label: 'Активен' },
+  { key: 'archived', label: 'Архив' },
+];
+
 export default function CandidatesPage() {
   const { user } = useAuth();
   const [candidates, setCandidates] = useState<CandidateDto[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [showArchived, setShowArchived] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [selectedCandidate, setSelectedCandidate] = useState<CandidateDto | null>(null);
   const [form, setForm] = useState(emptyCandidate);
   const [error, setError] = useState('');
+
+  const [searchName, setSearchName] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+  const [filterAnchor, setFilterAnchor] = useState<null | HTMLElement>(null);
+
   const canEdit = user?.role === UserRole.Admin || user?.role === UserRole.HR;
   const formValid = useCandidateValid(form);
+  const hasActiveFilters = searchName || dateFrom || dateTo || selectedStatuses.length > 0;
 
   const load = () => {
     setLoading(true);
-    candidatesApi.list(search || undefined, showArchived)
+    candidatesApi.list(undefined, true)
       .then((res) => setCandidates(res.data))
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(); }, [showArchived]);
+  useEffect(() => { load(); }, []);
 
-  const handleSearch = () => load();
+  const filteredCandidates = useMemo(() => {
+    return candidates.filter((c) => {
+      if (searchName) {
+        const term = searchName.toLowerCase();
+        if (!c.fullName.toLowerCase().includes(term) && !c.desiredPosition.toLowerCase().includes(term) && !c.city.toLowerCase().includes(term)) return false;
+      }
+      if (dateFrom && new Date(c.createdAt) < new Date(dateFrom)) return false;
+      if (dateTo) {
+        const to = new Date(dateTo);
+        to.setHours(23, 59, 59, 999);
+        if (new Date(c.createdAt) > to) return false;
+      }
+      if (selectedStatuses.length > 0) {
+        const matches = (selectedStatuses.includes('active') && !c.isArchived) || (selectedStatuses.includes('archived') && c.isArchived);
+        if (!matches) return false;
+      }
+      return true;
+    });
+  }, [candidates, searchName, dateFrom, dateTo, selectedStatuses]);
+
+  const toggleStatus = (key: string) => {
+    setSelectedStatuses((prev) => prev.includes(key) ? prev.filter((s) => s !== key) : [...prev, key]);
+  };
+
+  const clearAllFilters = () => {
+    setSearchName('');
+    setDateFrom('');
+    setDateTo('');
+    setSelectedStatuses([]);
+  };
 
   const handleCreate = async () => {
     if (!formValid) return;
@@ -97,6 +140,12 @@ export default function CandidatesPage() {
     load();
   };
 
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Вы уверены, что хотите удалить кандидата?')) return;
+    await candidatesApi.delete(id, 'Удаление из списка');
+    load();
+  };
+
   const formatDate = (d: string) => new Date(d).toLocaleDateString('ru-RU');
 
   return (
@@ -111,22 +160,76 @@ export default function CandidatesPage() {
       </Box>
 
       <Card sx={{ mb: 3 }}>
-        <CardContent sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
-          <TextField
-            size="small"
-            placeholder="Поиск по ФИО, должности, городу..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            sx={{ flex: 1, minWidth: 250 }}
-          />
-          <Button variant="outlined" onClick={handleSearch}>Найти</Button>
-          <FormControlLabel
-            control={<Switch checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />}
-            label="Архивные"
-          />
+        <CardContent>
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+            <IconButton
+              onClick={(e) => setFilterAnchor(e.currentTarget)}
+              color={hasActiveFilters ? 'primary' : 'default'}
+              sx={{ border: '1px solid', borderColor: hasActiveFilters ? 'primary.main' : 'divider', borderRadius: 2, px: 1.5 }}
+            >
+              <FilterList />
+              {hasActiveFilters && (
+                <Typography variant="caption" sx={{ ml: 0.5, color: 'primary.main', fontWeight: 600 }}>
+                  {(selectedStatuses.length > 0 ? 1 : 0) + (dateFrom ? 1 : 0) + (dateTo ? 1 : 0)}
+                </Typography>
+              )}
+            </IconButton>
+
+            <TextField
+              size="small"
+              placeholder="Поиск по ФИО, должности, городу..."
+              value={searchName}
+              onChange={(e) => setSearchName(e.target.value)}
+              slotProps={{ input: { startAdornment: <Search sx={{ color: 'text.secondary', mr: 1 }} /> } }}
+              sx={{ flex: 1, minWidth: 250 }}
+            />
+
+            {hasActiveFilters && (
+              <Button size="small" startIcon={<Clear />} onClick={clearAllFilters}>Сбросить фильтры</Button>
+            )}
+          </Box>
         </CardContent>
       </Card>
+
+      <Popover
+        open={Boolean(filterAnchor)}
+        anchorEl={filterAnchor}
+        onClose={() => setFilterAnchor(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+      >
+        <Box sx={{ p: 2.5, minWidth: 320 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.5 }}>Фильтры</Typography>
+
+          <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+            <TextField size="small" type="date" label="Дата от" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} sx={{ flex: 1 }} />
+            <TextField size="small" type="date" label="Дата до" value={dateTo} onChange={(e) => setDateTo(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} sx={{ flex: 1 }} />
+          </Box>
+
+          <Divider sx={{ mb: 1.5 }} />
+
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>Статус</Typography>
+            <Button size="small" onClick={() => setSelectedStatuses(statusOptions.map((s) => s.key))}>Выбрать все</Button>
+          </Box>
+          <FormGroup>
+            {statusOptions.map((s) => (
+              <FormControlLabel
+                key={s.key}
+                control={<Checkbox size="small" checked={selectedStatuses.includes(s.key)} onChange={() => toggleStatus(s.key)} />}
+                label={s.label}
+              />
+            ))}
+          </FormGroup>
+
+          <Divider sx={{ my: 1.5 }} />
+
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+            <Button size="small" onClick={clearAllFilters} startIcon={<Clear />}>Удалить все фильтры</Button>
+            <Button size="small" variant="contained" onClick={() => setFilterAnchor(null)}>Применить</Button>
+          </Box>
+        </Box>
+      </Popover>
 
       {loading ? <LinearProgress sx={{ mb: 2 }} /> : null}
 
@@ -144,18 +247,14 @@ export default function CandidatesPage() {
             </TableRow>
           </TableHead>
           <TableBody>
-            {candidates.map((c) => (
+            {filteredCandidates.map((c) => (
               <TableRow key={c.id} hover>
                 <TableCell>{c.fullName}</TableCell>
                 <TableCell>{c.desiredPosition}</TableCell>
                 <TableCell>{c.city}</TableCell>
                 <TableCell>{c.phone}</TableCell>
                 <TableCell>
-                  <Chip
-                    size="small"
-                    label={c.isArchived ? 'Архив' : 'Активен'}
-                    color={c.isArchived ? 'default' : 'success'}
-                  />
+                  <Chip size="small" label={c.isArchived ? 'Архив' : 'Активен'} color={c.isArchived ? 'default' : 'success'} />
                 </TableCell>
                 <TableCell>{formatDate(c.createdAt)}</TableCell>
                 <TableCell align="right">
@@ -171,13 +270,20 @@ export default function CandidatesPage() {
                       </IconButton>
                     </Tooltip>
                   )}
+                  {canEdit && (
+                    <Tooltip title="Удалить">
+                      <IconButton size="small" color="error" onClick={() => handleDelete(c.id)}>
+                        <Delete fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  )}
                 </TableCell>
               </TableRow>
             ))}
-            {candidates.length === 0 && (
+            {filteredCandidates.length === 0 && (
               <TableRow>
                 <TableCell colSpan={7} align="center" sx={{ py: 4, color: 'text.secondary' }}>
-                  Кандидаты не найдены
+                  {candidates.length === 0 ? 'Кандидаты не найдены' : 'Нет записей, соответствующих фильтрам'}
                 </TableCell>
               </TableRow>
             )}
@@ -190,28 +296,9 @@ export default function CandidatesPage() {
         <DialogContent>
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
-            <TextField
-              label="ФИО *"
-              value={form.fullName}
-              onChange={(e) => setForm({ ...form, fullName: e.target.value })}
-              error={form.fullName.length > 0 && (!required(form.fullName) || !hasAtLeastTwoWords(form.fullName))}
-              helperText={form.fullName.length > 0 && !hasAtLeastTwoWords(form.fullName) ? 'Укажите минимум 2 слова' : ''}
-            />
-            <TextField
-              label="Телефон *"
-              value={form.phone}
-              onChange={(e) => setForm({ ...form, phone: formatPhone(e.target.value) })}
-              placeholder="+7 (XXX) XXX-XX-XX"
-              error={form.phone.length > 0 && !isValidPhone(form.phone)}
-              helperText={form.phone.length > 0 && !isValidPhone(form.phone) ? 'Формат: +7 (XXX) XXX-XX-XX' : ''}
-            />
-            <TextField
-              label="Email"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              error={form.email.length > 0 && !isValidEmail(form.email)}
-              helperText={form.email.length > 0 && !isValidEmail(form.email) ? 'Некорректный email' : ''}
-            />
+            <TextField label="ФИО *" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} error={form.fullName.length > 0 && (!required(form.fullName) || !hasAtLeastTwoWords(form.fullName))} helperText={form.fullName.length > 0 && !hasAtLeastTwoWords(form.fullName) ? 'Укажите минимум 2 слова' : ''} />
+            <TextField label="Телефон *" value={form.phone} onChange={(e) => setForm({ ...form, phone: formatPhone(e.target.value) })} placeholder="+7 (XXX) XXX-XX-XX" error={form.phone.length > 0 && !isValidPhone(form.phone)} helperText={form.phone.length > 0 && !isValidPhone(form.phone) ? 'Формат: +7 (XXX) XXX-XX-XX' : ''} />
+            <TextField label="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} error={form.email.length > 0 && !isValidEmail(form.email)} helperText={form.email.length > 0 && !isValidEmail(form.email) ? 'Некорректный email' : ''} />
             <TextField label="Город *" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
             <TextField label="Желаемая должность *" value={form.desiredPosition} onChange={(e) => setForm({ ...form, desiredPosition: e.target.value })} />
             <TextField label="Образование *" value={form.education} onChange={(e) => setForm({ ...form, education: e.target.value })} />
