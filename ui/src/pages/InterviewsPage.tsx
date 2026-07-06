@@ -88,11 +88,13 @@ export default function InterviewsPage() {
   const [dateTo, setDateTo] = useState('');
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [selectedDecisions, setSelectedDecisions] = useState<string[]>([]);
+  const [filterCandidateName, setFilterCandidateName] = useState('');
+  const [filterVacancyTitle, setFilterVacancyTitle] = useState('');
   const [filterAnchor, setFilterAnchor] = useState<null | HTMLElement>(null);
 
   const canEdit = user?.role === UserRole.Admin || user?.role === UserRole.HR;
   const formValid = required(form.candidateId) && required(form.vacancyId) && required(form.interviewerId) && required(form.plannedDate);
-  const hasActiveFilters = searchName || dateFrom || dateTo || selectedStatuses.length > 0 || selectedDecisions.length > 0;
+  const hasActiveFilters = searchName || dateFrom || dateTo || selectedStatuses.length > 0 || selectedDecisions.length > 0 || filterCandidateName || filterVacancyTitle;
 
   const load = () => {
     setLoading(true);
@@ -105,6 +107,8 @@ export default function InterviewsPage() {
 
   const filteredInterviews = useMemo(() => {
     return interviews.filter((i) => {
+      if (filterCandidateName && i.candidateName !== filterCandidateName) return false;
+      if (filterVacancyTitle && i.vacancyTitle !== filterVacancyTitle) return false;
       if (searchName) {
         const term = searchName.toLowerCase();
         if (!i.candidateName.toLowerCase().includes(term) && !i.vacancyTitle.toLowerCase().includes(term) && !i.interviewerName.toLowerCase().includes(term)) return false;
@@ -122,7 +126,7 @@ export default function InterviewsPage() {
       }
       return true;
     });
-  }, [interviews, searchName, dateFrom, dateTo, selectedStatuses, selectedDecisions]);
+  }, [interviews, searchName, dateFrom, dateTo, selectedStatuses, selectedDecisions, filterCandidateName, filterVacancyTitle]);
 
   const toggleStatus = (key: string) => setSelectedStatuses((prev) => prev.includes(key) ? prev.filter((s) => s !== key) : [...prev, key]);
   const toggleDecision = (key: string) => setSelectedDecisions((prev) => prev.includes(key) ? prev.filter((d) => d !== key) : [...prev, key]);
@@ -133,6 +137,8 @@ export default function InterviewsPage() {
     setDateTo('');
     setSelectedStatuses([]);
     setSelectedDecisions([]);
+    setFilterCandidateName('');
+    setFilterVacancyTitle('');
   };
 
   const openCreate = () => {
@@ -207,6 +213,29 @@ export default function InterviewsPage() {
               <Button size="small" startIcon={<Clear />} onClick={clearAllFilters}>Сбросить фильтры</Button>
             )}
           </Box>
+
+          {(filterCandidateName || filterVacancyTitle) && (
+            <Box sx={{ display: 'flex', gap: 1, mt: 1.5, flexWrap: 'wrap' }}>
+              {filterCandidateName && (
+                <Chip
+                  label={`Кандидат: ${filterCandidateName}`}
+                  onDelete={() => setFilterCandidateName('')}
+                  color="primary"
+                  variant="outlined"
+                  size="small"
+                />
+              )}
+              {filterVacancyTitle && (
+                <Chip
+                  label={`Вакансия: ${filterVacancyTitle}`}
+                  onDelete={() => setFilterVacancyTitle('')}
+                  color="primary"
+                  variant="outlined"
+                  size="small"
+                />
+              )}
+            </Box>
+          )}
         </CardContent>
       </Card>
 
@@ -276,8 +305,40 @@ export default function InterviewsPage() {
           <TableBody>
             {filteredInterviews.map((i) => (
               <TableRow key={i.id} hover sx={{ cursor: 'pointer' }} onClick={() => navigate(`/interviews/${i.id}`)}>
-                <TableCell>{i.candidateName}</TableCell>
-                <TableCell>{i.vacancyTitle}</TableCell>
+                <TableCell>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    {i.candidateName}
+                    <Tooltip title="Фильтровать по кандидату">
+                      <IconButton
+                        size="small"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setFilterCandidateName(filterCandidateName === i.candidateName ? '' : i.candidateName);
+                        }}
+                        sx={{ color: filterCandidateName === i.candidateName ? 'primary.main' : 'action.active', '&:hover': { color: 'primary.main' } }}
+                      >
+                        <FilterList sx={{ fontSize: 16 }} />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                </TableCell>
+                <TableCell>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    {i.vacancyTitle}
+                    <Tooltip title="Фильтровать по вакансии">
+                      <IconButton
+                        size="small"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setFilterVacancyTitle(filterVacancyTitle === i.vacancyTitle ? '' : i.vacancyTitle);
+                        }}
+                        sx={{ color: filterVacancyTitle === i.vacancyTitle ? 'primary.main' : 'action.active', '&:hover': { color: 'primary.main' } }}
+                      >
+                        <FilterList sx={{ fontSize: 16 }} />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                </TableCell>
                 <TableCell>{i.interviewerName}</TableCell>
                 <TableCell>{formatDate(i.plannedDate)}</TableCell>
                 <TableCell>
