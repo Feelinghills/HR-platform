@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { BrowserRouter, Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import './index.css';
 import api, {
   mapCandidateFromApi, mapCandidateToApi,
@@ -22,16 +23,28 @@ const formatDateTime = (isoString) => {
   catch { return isoString; }
 };
 
+const formatPhone = (phone) => {
+  if (!phone) return '—';
+  const p = phone.replace(/\D/g, '');
+  if (p.length <= 1) return '+' + p;
+  if (p.length <= 4) return '+' + p.slice(0,1) + ' (' + p.slice(1) + ')';
+  if (p.length <= 7) return '+' + p.slice(0,1) + ' (' + p.slice(1,4) + ') ' + p.slice(4);
+  return '+' + p.slice(0,1) + ' (' + p.slice(1,4) + ') ' + p.slice(4,7) + '-' + p.slice(7,9) + '-' + p.slice(9);
+};
+
 function App() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const currentPage = location.pathname.replace('/', '') || 'dashboard';
   // --- СОСТОЯНИЯ ---
   const [step, setStep] = useState('login');
-  const [currentPage, setCurrentPage] = useState('dashboard');
   const [userName, setUserName] = useState('');
   const [userLogin, setUserLogin] = useState('');
   const [userRole, setUserRole] = useState('hr');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isFadingOut, setIsFadingOut] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [phoneError, setPhoneError] = useState('');
@@ -102,8 +115,8 @@ function App() {
   // --- СОСТОЯНИЯ ДЛЯ РОЛЕЙ И ПРАВ ---
   const [usersTab, setUsersTab] = useState('users'); // 'users' | 'roles'
   const [roles, setRoles] = useState([
-    { id: 'admin', name: 'Администратор', color: '#dbeafe', textColor: '#1d4ed8', permissions: ['candidates.view', 'candidates.create', 'candidates.edit', 'candidates.archive', 'candidates.delete', 'vacancies.view', 'vacancies.create', 'vacancies.edit', 'vacancies.archive', 'vacancies.delete', 'interviews.view', 'interviews.create', 'interviews.edit', 'interviews.decide', 'matrix.view', 'matrix.edit', 'competencies.view', 'competencies.create', 'competencies.edit', 'competencies.archive', 'competencies.delete', 'users.view', 'users.create', 'users.edit', 'users.delete', 'logs.view', 'archive.view', 'dashboard.view'] },
-    { id: 'hr', name: 'HR', color: '#d1fae5', textColor: '#065f46', permissions: ['candidates.view', 'candidates.create', 'candidates.edit', 'candidates.archive', 'vacancies.view', 'vacancies.create', 'vacancies.edit', 'vacancies.archive', 'interviews.view', 'interviews.create', 'interviews.edit', 'matrix.view', 'matrix.edit', 'competencies.view', 'competencies.create', 'competencies.edit', 'competencies.archive', 'users.view', 'logs.view', 'archive.view', 'dashboard.view'] },
+    { id: 'admin', name: 'Администратор', color: '#dbeafe', textColor: '#1d4ed8', permissions: ['candidates.view', 'candidates.create', 'candidates.edit', 'candidates.archive', 'candidates.delete', 'vacancies.view', 'vacancies.create', 'vacancies.edit', 'vacancies.archive', 'vacancies.delete', 'interviews.view', 'interviews.create', 'interviews.edit', 'interviews.decide', 'interviews.canInterview', 'matrix.view', 'matrix.edit', 'competencies.view', 'competencies.create', 'competencies.edit', 'competencies.archive', 'competencies.delete', 'users.view', 'users.create', 'users.edit', 'users.delete', 'logs.view', 'archive.view', 'dashboard.view'] },
+    { id: 'hr', name: 'HR', color: '#d1fae5', textColor: '#065f46', permissions: ['candidates.view', 'candidates.create', 'candidates.edit', 'candidates.archive', 'vacancies.view', 'vacancies.create', 'vacancies.edit', 'vacancies.archive', 'interviews.view', 'interviews.create', 'interviews.edit', 'interviews.canInterview', 'matrix.view', 'matrix.edit', 'competencies.view', 'competencies.create', 'competencies.edit', 'competencies.archive', 'users.view', 'logs.view', 'archive.view', 'dashboard.view'] },
     { id: 'reshala', name: 'Согласующий', color: '#fef3c7', textColor: '#92400e', permissions: ['candidates.view', 'vacancies.view', 'interviews.view', 'interviews.decide', 'matrix.view', 'competencies.view', 'archive.view', 'dashboard.view'] },
   ]);
   const [showRoleModal, setShowRoleModal] = useState(false);
@@ -113,7 +126,7 @@ function App() {
   const permissionGroups = {
     'Кандидаты': ['candidates.view', 'candidates.create', 'candidates.edit', 'candidates.archive', 'candidates.delete'],
     'Вакансии': ['vacancies.view', 'vacancies.create', 'vacancies.edit', 'vacancies.archive', 'vacancies.delete'],
-    'Собеседования': ['interviews.view', 'interviews.create', 'interviews.edit', 'interviews.decide'],
+    'Собеседования': ['interviews.view', 'interviews.create', 'interviews.edit', 'interviews.decide', 'interviews.canInterview'],
     'Компетенции': ['matrix.view', 'matrix.edit'],
     'Компетенции': ['competencies.view', 'competencies.create', 'competencies.edit', 'competencies.archive', 'competencies.delete'],
     'Пользователи': ['users.view', 'users.create', 'users.edit', 'users.delete'],
@@ -137,6 +150,7 @@ function App() {
     'interviews.create': 'Планирование собеседований',
     'interviews.edit': 'Редактирование собеседований',
     'interviews.decide': 'Принятие решений',
+    'interviews.canInterview': 'Может быть интервьюером',
     'matrix.view': 'Просмотр матрицы',
     'matrix.edit': 'Редактирование матрицы',
     'competencies.view': 'Просмотр компетенций',
@@ -151,6 +165,11 @@ function App() {
     'logs.view': 'Просмотр журнала',
     'archive.view': 'Просмотр архива',
     'dashboard.view': 'Главная страница',
+  };
+
+  const hasPermission = (perm) => {
+    const role = roles.find(r => r.id === userRole);
+    return role ? role.permissions.includes(perm) : false;
   };
 
   // --- СОСТОЯНИЯ ДЛЯ МАТРИЦЫ КОМПЕТЕНЦИЙ ---
@@ -396,6 +415,11 @@ function App() {
     e.preventDefault();
     try {
       if (editingUserId) {
+        await api.updateUser(editingUserId, {
+          fullName: userFormData.name,
+          email: userFormData.email || '',
+          role: roleValues[userFormData.role] || 'HR',
+        });
         await api.setUserStatus(editingUserId, userFormData.isActive !== false);
         setUsers(users.map(u =>
           u.id === editingUserId ? { ...u, ...userFormData } : u
@@ -679,13 +703,26 @@ function App() {
   // ОБРАБОТЧИКИ ДЛЯ СОБЕСЕДОВАНИЙ
   // ================================================================
   const handleArchiveInterview = async (interviewId) => {
-    const interview = interviews.find(i => i.id === interviewId);
     try {
-      const newStatus = interview.isArchived ? 'Planned' : 'Cancelled';
-      const updated = await api.updateInterviewStatus(interviewId, { status: newStatus });
-      setInterviews(interviews.map(i =>
-        i.id === interviewId ? mapInterviewFromApi(updated) : i
-      ));
+      const updated = await api.archiveInterview(interviewId);
+      const mapped = mapInterviewFromApi(updated);
+      setInterviews(interviews.map(i => i.id === interviewId ? mapped : i));
+      if (selectedInterview && selectedInterview.id === interviewId) {
+        setSelectedInterview(mapped);
+      }
+    } catch (err) {
+      alert('Ошибка: ' + err.message);
+    }
+  };
+
+  const handleUnarchiveInterview = async (interviewId) => {
+    try {
+      const updated = await api.unarchiveInterview(interviewId);
+      const mapped = mapInterviewFromApi(updated);
+      setInterviews(interviews.map(i => i.id === interviewId ? mapped : i));
+      if (selectedInterview && selectedInterview.id === interviewId) {
+        setSelectedInterview(mapped);
+      }
     } catch (err) {
       alert('Ошибка: ' + err.message);
     }
@@ -730,7 +767,7 @@ function App() {
       if (decision === 'Ожидает') {
         updated = await api.updateInterviewStatus(interviewId, { status: 'Completed', comments: '' });
       } else if (decision === 'Без решения') {
-        updated = await api.updateInterviewStatus(interviewId, { status: 'Cancelled', comments: '' });
+        updated = await api.updateInterviewStatus(interviewId, { status: 'Cancelled', comments: '', decision: 'Pending' });
       } else {
         const apiDecision = decisionValues[decision] || decision;
         updated = await api.decideInterview(interviewId, { decision: apiDecision });
@@ -748,15 +785,11 @@ function App() {
   const handleScheduleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const candidateId = newInterview.candidateId;
-      const selectedCandidate = candidates.find(c => c.id === candidateId);
-      const selectedVacancy = vacanciesList.find(v => v.title === (selectedCandidate?.vacancy || ''));
-
       const plannedDate = new Date(`${newInterview.date}T${newInterview.time}`).toISOString();
 
       const dto = {
-        candidateId: candidateId,
-        vacancyId: selectedVacancy?.id || vacanciesList[0]?.id,
+        candidateId: newInterview.candidateId,
+        vacancyId: newInterview.vacancyId,
         interviewerId: newInterview.interviewer,
         plannedDate: plannedDate,
         comments: '',
@@ -764,7 +797,7 @@ function App() {
 
       const created = await api.createInterview(dto);
       setInterviews([mapInterviewFromApi(created), ...interviews]);
-      setNewInterview({ candidateId: '', interviewer: '', date: '', time: '' });
+      setNewInterview({ candidateId: '', vacancyId: '', interviewer: '', date: '', time: '' });
       setShowScheduleModal(false);
     } catch (err) {
       alert('Ошибка: ' + err.message);
@@ -860,7 +893,7 @@ function App() {
     switch(type) {
       case 'Карточка кандидата':
         title = 'КАРТОЧКА КАНДИДАТА';
-        content = `ФИО: ${candidate ? candidate.name : 'Не указано'}\nТелефон: ${candidate ? candidate.phone : 'Не указано'}\nГород: ${candidate ? candidate.city : 'Не указано'}\nВакансия: ${interview.vacancy}\nОпыт работы: ${candidate ? candidate.experience : 'Не указано'}\nОбразование: ${candidate ? candidate.education : 'Не указано'}\nПредыдущее место работы: ${candidate ? candidate.previousJob : 'Не указано'}\nНавыки: ${candidate && candidate.skills ? candidate.skills.join(', ') : 'Не указаны'}`;
+        content = `ФИО: ${candidate ? candidate.name : 'Не указано'}\nТелефон: ${candidate ? formatPhone(candidate.phone) : 'Не указано'}\nГород: ${candidate ? candidate.city : 'Не указано'}\nВакансия: ${interview.vacancy}\nОпыт работы: ${candidate ? candidate.experience : 'Не указано'}\nОбразование: ${candidate ? candidate.education : 'Не указано'}\nПредыдущее место работы: ${candidate ? candidate.previousJob : 'Не указано'}\nНавыки: ${candidate && candidate.skills ? candidate.skills.join(', ') : 'Не указаны'}`;
         break;
       case 'Протокол собеседования':
         title = 'ПРОТОКОЛ СОБЕСЕДОВАНИЯ';
@@ -972,7 +1005,7 @@ function App() {
     setUserRole('hr');
     localStorage.removeItem('token');
     setIsProfileOpen(false);
-    setCurrentPage('dashboard');
+    navigate('dashboard');
     setSelectedCandidate(null);
     setSelectedInterview(null);
     setRatings({});
@@ -1004,6 +1037,17 @@ function App() {
     setStatusFilter('Все');
     setDateFilterFrom('');
     setDateFilterTo('');
+    setShowInterviewCard(false);
+    setSelectedInterview(null);
+    setSelectedCandidate(null);
+    setIsEditing(false);
+    setShowAddModal(false);
+    setShowScheduleModal(false);
+    setShowVacancyModal(false);
+    setShowCompetencyModal(false);
+    setShowUserModal(false);
+    setShowRoleModal(false);
+    if (step === 'main') loadData();
   }, [currentPage]);
 
   // --- ОБНОВЛЕНИЕ ЖУРНАЛА ПРИ ОТКРЫТИИ ---
@@ -1080,7 +1124,15 @@ function App() {
           <div style={{ background: '#171D24', padding: '38px 48px', borderRadius: '20px', boxShadow: '0 8px 32px rgba(0,0,0,0.3)', width: '100%', maxWidth: '460px', textAlign: 'center' }}>
             <form onSubmit={(e) => { e.preventDefault(); const login = e.target.login.value; const password = e.target.password.value; handleLogin(login, password); }}>
               <input name="login" type="text" placeholder="Логин или электронная почта" style={{ width: '100%', padding: '12px 17px', border: '1px solid #6A7787', borderRadius: '10px', fontSize: '17px', boxSizing: 'border-box', background: '#11171F', color: '#ffffff', outline: 'none', marginBottom: '17px' }} required />
-              <input name="password" type="password" placeholder="Пароль" style={{ width: '100%', padding: '12px 17px', border: '1px solid #6A7787', borderRadius: '10px', fontSize: '17px', boxSizing: 'border-box', background: '#11171F', color: '#ffffff', outline: 'none', marginBottom: '17px' }} required />
+              <div style={{ position: 'relative', marginBottom: '17px' }}>
+                <input name="password" type={showPassword ? 'text' : 'password'} placeholder="Пароль" style={{ width: '100%', padding: '12px 50px 12px 17px', border: '1px solid #6A7787', borderRadius: '10px', fontSize: '17px', boxSizing: 'border-box', background: '#11171F', color: '#ffffff', outline: 'none' }} required />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', padding: '0', lineHeight: '1', display: 'flex', alignItems: 'center' }}>
+                  {showPassword
+                    ? <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6A7787" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                    : <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6A7787" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  }
+                </button>
+              </div>
               <button type="submit" style={{ width: '100%', padding: '12px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '10px', fontSize: '18px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s', marginTop: '4px' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Вход</button>
               {error && <p style={{ color: '#ef4444', fontSize: '15px', marginTop: '17px' }}>{error}</p>}
             </form>
@@ -1104,7 +1156,7 @@ function App() {
       return stars;
     };
     const getDisplayValue = (value) => value || 'Не указано';
-    const isHRorAdmin = userRole === 'hr' || userRole === 'admin';
+    const isHRorAdmin = hasPermission('candidates.edit') || hasPermission('candidates.archive');
     
     // Находим собеседование этого кандидата
     const candidateInterview = interviews.find(i => i.candidateId === selectedCandidate.id);
@@ -1136,7 +1188,7 @@ function App() {
           </div>
         </div>
         <div style={{ background: '#171D24', padding: '24px 28px', borderRadius: '12px', marginBottom: '24px' }}>
-          <div style={{ display: 'flex', padding: '10px 0', borderBottom: '1px solid #2A3344' }}><span style={{ fontSize: '14px', color: '#6A7787', minWidth: '180px' }}>Номер телефона:</span>{isEditing ? <input type="tel" value={editData.phone} onChange={(e) => { const value = e.target.value.replace(/\D/g, ''); if (value.length <= 11) handleEditChange('phone', value); }} placeholder="89991234567" style={{ background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', padding: '4px 12px', fontSize: '14px', outline: 'none', width: '100%', maxWidth: '200px', flex: 1, boxSizing: 'border-box' }} maxLength="11" /> : <span style={{ fontSize: '14px', color: '#ffffff', flex: 1 }}>{getDisplayValue(selectedCandidate.phone)}</span>}</div>
+          <div style={{ display: 'flex', padding: '10px 0', borderBottom: '1px solid #2A3344' }}><span style={{ fontSize: '14px', color: '#6A7787', minWidth: '180px' }}>Номер телефона:</span>{isEditing ? <input type="tel" value={editData.phone} onChange={(e) => { const value = e.target.value.replace(/\D/g, ''); if (value.length <= 11) handleEditChange('phone', value); }} placeholder="89991234567" style={{ background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', padding: '4px 12px', fontSize: '14px', outline: 'none', width: '100%', maxWidth: '200px', flex: 1, boxSizing: 'border-box' }} maxLength="11" /> : <span style={{ fontSize: '14px', color: '#ffffff', flex: 1 }}>{formatPhone(selectedCandidate.phone)}</span>}</div>
           <div style={{ display: 'flex', padding: '10px 0', borderBottom: '1px solid #2A3344' }}><span style={{ fontSize: '14px', color: '#6A7787', minWidth: '180px' }}>Город:</span>{isEditing ? <input type="text" value={editData.city} onChange={(e) => handleEditChange('city', e.target.value)} style={{ background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', padding: '4px 12px', fontSize: '14px', outline: 'none', width: '100%', maxWidth: '200px', flex: 1, boxSizing: 'border-box' }} /> : <span style={{ fontSize: '14px', color: '#ffffff', flex: 1 }}>{getDisplayValue(selectedCandidate.city)}</span>}</div>
           <div style={{ display: 'flex', padding: '10px 0', borderBottom: '1px solid #2A3344' }}><span style={{ fontSize: '14px', color: '#6A7787', minWidth: '180px' }}>Вакансия:</span>{isEditing ? <select value={editData.vacancy} onChange={(e) => handleEditChange('vacancy', e.target.value)} style={{ background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', padding: '4px 12px', fontSize: '14px', outline: 'none', width: '100%', maxWidth: '200px', flex: 1, boxSizing: 'border-box' }}><option value="">Выберите вакансию</option>{vacanciesList.filter(v => !v.isArchived).map((v) => <option key={v.id} value={v.title}>{v.title}</option>)}</select> : <span style={{ fontSize: '14px', color: '#ffffff', flex: 1 }}>{getDisplayValue(selectedCandidate.vacancy)}</span>}</div>
           <div style={{ display: 'flex', padding: '10px 0', borderBottom: '1px solid #2A3344' }}><span style={{ fontSize: '14px', color: '#6A7787', minWidth: '180px' }}>Опыт работы:</span>{isEditing ? <select value={editData.experience} onChange={(e) => handleEditChange('experience', e.target.value)} style={{ background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', padding: '4px 12px', fontSize: '14px', outline: 'none', width: '100%', maxWidth: '200px', flex: 1, boxSizing: 'border-box' }}><option value="">Выберите уровень</option><option value="Junior (0-1 год)">Junior (0-1 год)</option><option value="Middle (2-4 года)">Middle (2-4 года)</option><option value="Senior (5+ лет)">Senior (5+ лет)</option></select> : <span style={{ fontSize: '14px', color: '#ffffff', flex: 1 }}>{getDisplayValue(selectedCandidate.experience)}</span>}</div>
@@ -1162,13 +1214,12 @@ function App() {
             <button onClick={() => setShowAddModal(false)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#6A7787', transition: 'color 0.2s' }} onMouseEnter={(e) => e.target.style.color = '#ffffff'} onMouseLeave={(e) => e.target.style.color = '#6A7787'}>✕</button>
           </div>
           <form onSubmit={handleAddCandidate}>
-            <div style={{ marginBottom: '14px' }}><label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>ФИО *</label><input type="text" value={newCandidate.name} onChange={(e) => setNewCandidate({ ...newCandidate, name: e.target.value })} placeholder="Иванов Иван Иванович" style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} required pattern="^[А-Яа-яЁёA-Za-z]+\s[А-Яа-яЁёA-Za-z]+\s?[А-Яа-яЁёA-Za-z]*$" title="Введите минимум два слова (Имя Фамилия)" /></div>
-            <div style={{ marginBottom: '14px' }}><label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Номер телефона *</label><input type="tel" value={newCandidate.phone} onChange={(e) => { const value = e.target.value.replace(/\D/g, ''); if (value.length <= 11) setNewCandidate({ ...newCandidate, phone: value }); setPhoneError(''); }} placeholder="89991234567" style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} required maxLength="11" />{phoneError && <p style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }}>{phoneError}</p>}</div>
-            <div style={{ marginBottom: '14px' }}><label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Вакансия *</label><select value={newCandidate.vacancy} onChange={(e) => setNewCandidate({ ...newCandidate, vacancy: e.target.value })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} required><option value="">Выберите вакансию</option>{vacanciesList.filter(v => !v.isArchived).map((vacancy) => <option key={vacancy.id} value={vacancy.title}>{vacancy.title}</option>)}</select></div>
+            <div style={{ marginBottom: '14px' }}><label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>ФИО *</label><input type="text" value={newCandidate.name} onChange={(e) => setNewCandidate({ ...newCandidate, name: e.target.value })} placeholder="Иванов Иван Иванович" style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} required pattern="^[А-Яа-яЁёA-Za-z]+\s[А-Яа-яЁёA-Za-z]+(\s[А-Яа-яЁёA-Za-z]+)?$" title="Введите минимум два слова (Фамилия Имя)" /></div>
+            <div style={{ marginBottom: '14px' }}><label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Номер телефона *</label><input type="tel" value={(() => { const p = newCandidate.phone; if (!p || p.length === 0) return ''; if (p.length <= 1) return '+' + p; if (p.length <= 4) return '+' + p.slice(0,1) + ' (' + p.slice(1); if (p.length <= 7) return '+' + p.slice(0,1) + ' (' + p.slice(1,4) + ') ' + p.slice(4); return '+' + p.slice(0,1) + ' (' + p.slice(1,4) + ') ' + p.slice(4,7) + '-' + p.slice(7,9) + '-' + p.slice(9); })()} onChange={(e) => { let val = e.target.value.replace(/\D/g, ''); if (!val.startsWith('7') && val.length > 0) val = '7' + val; if (val.length > 11) val = val.slice(0, 11); setNewCandidate({ ...newCandidate, phone: val }); setPhoneError(''); }} onFocus={(e) => { if (!newCandidate.phone) { setNewCandidate({ ...newCandidate, phone: '7' }); } }} placeholder="+7 (___) ___-__-__" style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} required maxLength="18" />{phoneError && <p style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }}>{phoneError}</p>}</div>
             <div style={{ marginBottom: '14px' }}><label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Город *</label><input type="text" value={newCandidate.city} onChange={(e) => setNewCandidate({ ...newCandidate, city: e.target.value })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} required /></div>
             <div style={{ marginBottom: '14px' }}><label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Образование *</label><input type="text" value={newCandidate.education} onChange={(e) => setNewCandidate({ ...newCandidate, education: e.target.value })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} required /></div>
-            <div style={{ marginBottom: '14px' }}><label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Опыт работы *</label><select value={newCandidate.experience} onChange={(e) => setNewCandidate({ ...newCandidate, experience: e.target.value })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} required><option value="">Выберите уровень</option><option value="Junior (0-1 год)">Junior (0-1 год)</option><option value="Middle (2-4 года)">Middle (2-4 года)</option><option value="Senior (5+ лет)">Senior (5+ лет)</option></select></div>
-            <div style={{ marginBottom: '14px' }}><label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Предыдущее место работы</label><input type="text" value={newCandidate.previousJob} onChange={(e) => setNewCandidate({ ...newCandidate, previousJob: e.target.value })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} /></div>
+            <div style={{ marginBottom: '14px' }}><label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Опыт работы *</label><select value={newCandidate.experience} onChange={(e) => setNewCandidate({ ...newCandidate, experience: e.target.value, previousJob: (e.target.value === 'Без опыта') ? '' : newCandidate.previousJob })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} required><option value="">Выберите уровень</option><option value="Без опыта">Без опыта</option><option value="Junior (0-1 год)">Junior (0-1 год)</option><option value="Middle (2-4 года)">Middle (2-4 года)</option><option value="Senior (5+ лет)">Senior (5+ лет)</option></select></div>
+            {newCandidate.experience && newCandidate.experience !== 'Без опыта' && <div style={{ marginBottom: '14px' }}><label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Предыдущее место работы *</label><input type="text" value={newCandidate.previousJob} onChange={(e) => setNewCandidate({ ...newCandidate, previousJob: e.target.value })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} required /></div>}
             <div style={{ marginBottom: '20px' }}><label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Навыки (через запятую)</label><input type="text" value={newCandidate.skills} onChange={(e) => setNewCandidate({ ...newCandidate, skills: e.target.value })} placeholder="Например: Python, SQL, Java" style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} /></div>
             <div style={{ display: 'flex', gap: '12px' }}><button type="button" onClick={() => setShowAddModal(false)} style={{ flex: 1, padding: '10px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Отмена</button><button type="submit" style={{ flex: 1, padding: '10px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Добавить</button></div>
           </form>
@@ -1188,8 +1239,9 @@ function App() {
             <button onClick={() => setShowScheduleModal(false)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#6A7787', transition: 'color 0.2s' }} onMouseEnter={(e) => e.target.style.color = '#ffffff'} onMouseLeave={(e) => e.target.style.color = '#6A7787'}>✕</button>
           </div>
           <form onSubmit={handleScheduleSubmit}>
-            <div style={{ marginBottom: '14px' }}><label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Кандидат *</label><select value={newInterview.candidateId} onChange={(e) => setNewInterview({ ...newInterview, candidateId: e.target.value })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} required><option value="">Выберите кандидата</option>{candidates.filter(c => !c.isArchived).map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name} — {candidate.vacancy}</option>)}</select></div>
-            <div style={{ marginBottom: '14px' }}><label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Интервьюер *</label><select value={newInterview.interviewer} onChange={(e) => setNewInterview({ ...newInterview, interviewer: e.target.value })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} required><option value="">Выберите интервьюера</option>{users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select></div>
+            <div style={{ marginBottom: '14px' }}><label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Кандидат *</label><select value={newInterview.candidateId} onChange={(e) => setNewInterview({ ...newInterview, candidateId: e.target.value })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} required><option value="">Выберите кандидата</option>{candidates.filter(c => !c.isArchived).map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}</select></div>
+            <div style={{ marginBottom: '14px' }}><label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Вакансия *</label><select value={newInterview.vacancyId || ''} onChange={(e) => setNewInterview({ ...newInterview, vacancyId: e.target.value })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} required><option value="">Выберите вакансию</option>{vacanciesList.filter(v => !v.isArchived).map((vacancy) => <option key={vacancy.id} value={vacancy.id}>{vacancy.title}</option>)}</select></div>
+            <div style={{ marginBottom: '14px' }}><label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Интервьюер *</label><select value={newInterview.interviewer} onChange={(e) => setNewInterview({ ...newInterview, interviewer: e.target.value })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} required><option value="">Выберите интервьюера</option>{users.filter(u => u.role === 'hr').map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select></div>
             <div style={{ display: 'flex', gap: '12px' }}><div style={{ flex: 1, marginBottom: '14px' }}><label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Дата *</label><input type="date" value={newInterview.date} onChange={(e) => setNewInterview({ ...newInterview, date: e.target.value })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} required /></div><div style={{ flex: 1, marginBottom: '14px' }}><label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Время *</label><input type="time" value={newInterview.time} onChange={(e) => setNewInterview({ ...newInterview, time: e.target.value })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} required /></div></div>
             <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}><button type="button" onClick={() => setShowScheduleModal(false)} style={{ flex: 1, padding: '10px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Отмена</button><button type="submit" style={{ flex: 1, padding: '10px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Запланировать</button></div>
           </form>
@@ -1324,14 +1376,14 @@ function App() {
               <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#ffffff', marginBottom: '16px' }}>Действия</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {/* Завершить / Отменить — только для Запланировано */}
-                {selectedInterview.status === 'Запланировано' && (userRole === 'admin' || userRole === 'hr') && (
+                {selectedInterview.status === 'Запланировано' && hasPermission('interviews.edit') && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <button onClick={() => { if (window.confirm('Завершить собеседование? Статус изменится на "Проведено".')) handleDecision(selectedInterview.id, 'Ожидает'); }} style={{ padding: '10px 16px', background: '#3E503A', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s', fontFamily: "'Unbounded', sans-serif", textAlign: 'left' }} onMouseEnter={(e) => e.target.style.background = '#4A6A4A'} onMouseLeave={(e) => e.target.style.background = '#3E503A'}>Завершить</button>
                     <button onClick={() => { if (window.confirm('Отменить собеседование? Статус изменится на "Отменено".')) handleDecision(selectedInterview.id, 'Без решения'); }} style={{ padding: '10px 16px', background: '#4E1717', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s', fontFamily: "'Unbounded', sans-serif", textAlign: 'left' }} onMouseEnter={(e) => e.target.style.background = '#6E2727'} onMouseLeave={(e) => e.target.style.background = '#4E1717'}>Отменить</button>
                   </div>
                 )}
                 {/* Решения — только для Проведено + Ожидает */}
-                {selectedInterview.status === 'Проведено' && selectedInterview.decision === 'Ожидает' && (userRole === 'admin' || userRole === 'reshala') && (
+                {selectedInterview.status === 'Проведено' && selectedInterview.decision === 'Ожидает' && hasPermission('interviews.decide') && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <button onClick={() => handleDecision(selectedInterview.id, 'Принят')} style={{ padding: '10px 16px', background: '#3E503A', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s', fontFamily: "'Unbounded', sans-serif", textAlign: 'left' }} onMouseEnter={(e) => e.target.style.background = '#4A6A4A'} onMouseLeave={(e) => e.target.style.background = '#3E503A'}>Нанять</button>
                     <button onClick={() => handleDecision(selectedInterview.id, 'Отказан')} style={{ padding: '10px 16px', background: '#4E1717', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s', fontFamily: "'Unbounded', sans-serif", textAlign: 'left' }} onMouseEnter={(e) => e.target.style.background = '#6E2727'} onMouseLeave={(e) => e.target.style.background = '#4E1717'}>Отклонить</button>
@@ -1357,7 +1409,7 @@ function App() {
     const filteredInterviews = getFilteredInterviews();
     const getStatusColor = (status) => { switch(status) { case 'Запланировано': return '#7F7B6D'; case 'Проведено': return '#3E503A'; case 'Отменено': return '#4E1717'; default: return '#6A7787'; } };
     const getDecisionColor = (decision) => { switch(decision) { case 'Принят': return '#3E503A'; case 'Отказан': return '#4E1717'; case 'Ожидает': return '#7F7B6D'; case 'Без решения': return '#4E1717'; case 'Следующий этап': return '#333F50'; default: return '#6A7787'; } };
-    const isHRorAdmin = userRole === 'hr' || userRole === 'admin';
+    const isHRorAdmin = hasPermission('interviews.create') || hasPermission('interviews.edit');
     const today = new Date().toISOString().split('T')[0];
     
     return (
@@ -1373,7 +1425,6 @@ function App() {
             <button onClick={() => setShowArchivedInterviews(!showArchivedInterviews)} style={{ padding: '8px 20px', background: showArchivedInterviews ? '#3E503A' : '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = showArchivedInterviews ? '#4A6A4A' : '#4A5A70'} onMouseLeave={(e) => e.target.style.background = showArchivedInterviews ? '#3E503A' : '#333F50'}>{showArchivedInterviews ? 'Скрыть архив' : 'Показать архив'}</button>
           </div>
         </div>
-
         <div style={{ marginBottom: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
             <input
@@ -1435,7 +1486,7 @@ function App() {
                       {!interview.isArchived && <button onClick={() => openInterviewCard(interview)} style={{ padding: '4px 16px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', width: '100%', maxWidth: '140px' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Открыть карточку</button>}
                       {isHRorAdmin && editingInterviewId !== interview.id && !interview.isArchived && <button onClick={() => startEditInterview(interview)} style={{ padding: '4px 16px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', width: '100%', maxWidth: '140px' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Редактировать</button>}
                       {editingInterviewId === interview.id && (<><button onClick={saveEditInterview} style={{ padding: '4px 16px', background: '#3E503A', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', width: '100%', maxWidth: '140px' }} onMouseEnter={(e) => e.target.style.background = '#4A6A4A'} onMouseLeave={(e) => e.target.style.background = '#3E503A'}>Сохранить</button><button onClick={cancelEditInterview} style={{ padding: '4px 16px', background: '#4E1717', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', width: '100%', maxWidth: '140px' }} onMouseEnter={(e) => e.target.style.background = '#6E2727'} onMouseLeave={(e) => e.target.style.background = '#4E1717'}>Отмена</button></>)}
-                      {isHRorAdmin && editingInterviewId !== interview.id && <button onClick={() => handleArchiveInterview(interview.id)} style={{ padding: '4px 16px', background: interview.isArchived ? '#3E503A' : '#333F50', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', width: '100%', maxWidth: '140px' }} onMouseEnter={(e) => e.target.style.background = interview.isArchived ? '#4A6A4A' : '#4A5A70'} onMouseLeave={(e) => e.target.style.background = interview.isArchived ? '#3E503A' : '#333F50'}>{interview.isArchived ? 'Разархивировать' : 'Архивировать'}</button>}
+                      {isHRorAdmin && editingInterviewId !== interview.id && <button onClick={() => interview.isArchived ? handleUnarchiveInterview(interview.id) : handleArchiveInterview(interview.id)} style={{ padding: '4px 16px', background: interview.isArchived ? '#3E503A' : '#333F50', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', width: '100%', maxWidth: '140px' }} onMouseEnter={(e) => e.target.style.background = interview.isArchived ? '#4A6A4A' : '#4A5A70'} onMouseLeave={(e) => e.target.style.background = interview.isArchived ? '#3E503A' : '#333F50'}>{interview.isArchived ? 'Разархивировать' : 'Архивировать'}</button>}
                     </div>
                   </td>
                 </tr>);
@@ -1456,7 +1507,7 @@ function App() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}><h1 style={{ fontSize: '28px', fontWeight: '700', color: '#ffffff' }}>Кандидаты</h1><span style={{ fontSize: '16px', color: '#6A7787' }}>Всего: {candidates.length}</span></div>
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            <button onClick={() => setShowAddModal(true)} style={{ padding: '8px 20px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Добавить кандидата</button>
+            {hasPermission('candidates.create') && <button onClick={() => setShowAddModal(true)} style={{ padding: '8px 20px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Добавить кандидата</button>}
             <button onClick={() => setShowArchivedCandidates(!showArchivedCandidates)} style={{ padding: '8px 20px', background: showArchivedCandidates ? '#3E503A' : '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = showArchivedCandidates ? '#4A6A4A' : '#4A5A70'} onMouseLeave={(e) => e.target.style.background = showArchivedCandidates ? '#3E503A' : '#333F50'}>{showArchivedCandidates ? 'Скрыть архив' : 'Показать архив'}</button>
           </div>
         </div>
@@ -1469,10 +1520,10 @@ function App() {
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {filteredCandidates.map((candidate) => (<div key={candidate.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', background: '#171D24', borderRadius: '12px', transition: 'all 0.2s', opacity: candidate.isArchived ? 0.6 : 1 }}>
-            <div><h3 style={{ fontSize: '16px', fontWeight: '600', color: '#ffffff' }}>{candidate.name}</h3><p style={{ fontSize: '14px', color: '#6A7787', marginTop: '4px' }}>{candidate.phone}</p><p style={{ fontSize: '14px', color: '#6A7787', marginTop: '2px' }}>{candidate.vacancy}</p></div>
+            <div><h3 style={{ fontSize: '16px', fontWeight: '600', color: '#ffffff' }}>{candidate.name}</h3><p style={{ fontSize: '14px', color: '#6A7787', marginTop: '4px' }}>{formatPhone(candidate.phone)}</p><p style={{ fontSize: '14px', color: '#6A7787', marginTop: '2px' }}>{candidate.vacancy}</p></div>
             <div style={{ display: 'flex', gap: '10px' }}>
               {!candidate.isArchived && <button onClick={() => { setSelectedCandidate(candidate); setRatings(candidate.ratings || {}); setIsEditing(false); }} style={{ background: 'none', border: 'none', color: '#6A7787', fontSize: '12px', cursor: 'pointer', transition: 'color 0.2s' }} onMouseEnter={(e) => e.target.style.color = '#ffffff'} onMouseLeave={(e) => e.target.style.color = '#6A7787'}>Перейти к карточке</button>}
-              {(userRole === 'hr' || userRole === 'admin') && <button onClick={() => handleArchiveCandidate(candidate.id)} style={{ background: 'none', border: 'none', color: candidate.isArchived ? '#3E503A' : '#6A7787', fontSize: '12px', cursor: 'pointer', transition: 'color 0.2s' }} onMouseEnter={(e) => e.target.style.color = candidate.isArchived ? '#4A6A4A' : '#ffffff'} onMouseLeave={(e) => e.target.style.color = candidate.isArchived ? '#3E503A' : '#6A7787'}>{candidate.isArchived ? 'Разархивировать' : 'Архивировать'}</button>}
+              {hasPermission('candidates.archive') && <button onClick={() => handleArchiveCandidate(candidate.id)} style={{ background: 'none', border: 'none', color: candidate.isArchived ? '#3E503A' : '#6A7787', fontSize: '12px', cursor: 'pointer', transition: 'color 0.2s' }} onMouseEnter={(e) => e.target.style.color = candidate.isArchived ? '#4A6A4A' : '#ffffff'} onMouseLeave={(e) => e.target.style.color = candidate.isArchived ? '#3E503A' : '#6A7787'}>{candidate.isArchived ? 'Разархивировать' : 'Архивировать'}</button>}
             </div>
           </div>))}
         </div>
@@ -1494,12 +1545,8 @@ function App() {
             <span style={{ fontSize: '16px', color: '#6A7787' }}>Всего: {competencies.length}</span>
           </div>
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            <button onClick={openAddCompetencyModal} style={{ padding: '8px 20px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>
-              Добавить компетенцию
-            </button>
-            <button onClick={() => setShowArchivedCompetencies(!showArchivedCompetencies)} style={{ padding: '8px 20px', background: showArchivedCompetencies ? '#3E503A' : '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = showArchivedCompetencies ? '#4A6A4A' : '#4A5A70'} onMouseLeave={(e) => e.target.style.background = showArchivedCompetencies ? '#3E503A' : '#333F50'}>
-              {showArchivedCompetencies ? 'Скрыть архив' : 'Показать архив'}
-            </button>
+            {hasPermission('competencies.create') && <button onClick={openAddCompetencyModal} style={{ padding: '8px 20px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Добавить компетенцию</button>}
+            <button onClick={() => setShowArchivedCompetencies(!showArchivedCompetencies)} style={{ padding: '8px 20px', background: showArchivedCompetencies ? '#3E503A' : '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = showArchivedCompetencies ? '#4A6A4A' : '#4A5A70'} onMouseLeave={(e) => e.target.style.background = showArchivedCompetencies ? '#3E503A' : '#333F50'}>{showArchivedCompetencies ? 'Скрыть архив' : 'Показать архив'}</button>
           </div>
         </div>
 
@@ -1553,9 +1600,9 @@ function App() {
                     </td>
                     <td style={{ padding: '12px 16px', color: '#ffffff', fontSize: '14px', textAlign: 'center' }}>
                       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
-                        {!comp.isArchived && <button onClick={() => openEditCompetencyModal(comp)} style={{ padding: '4px 12px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Редактировать</button>}
-                        <button onClick={() => handleArchiveCompetency(comp.id)} style={{ padding: '4px 12px', background: comp.isArchived ? '#3E503A' : '#333F50', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }} onMouseEnter={(e) => e.target.style.background = comp.isArchived ? '#4A6A4A' : '#4A5A70'} onMouseLeave={(e) => e.target.style.background = comp.isArchived ? '#3E503A' : '#333F50'}>{comp.isArchived ? 'Разархивировать' : 'Архивировать'}</button>
-                        {!comp.isArchived && <button onClick={() => handleDeleteCompetency(comp.id)} style={{ padding: '4px 12px', background: '#4E1717', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }} onMouseEnter={(e) => e.target.style.background = '#6E2727'} onMouseLeave={(e) => e.target.style.background = '#4E1717'}>Удалить</button>}
+                        {!comp.isArchived && hasPermission('competencies.edit') && <button onClick={() => openEditCompetencyModal(comp)} style={{ padding: '4px 12px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Редактировать</button>}
+                        {hasPermission('competencies.archive') && <button onClick={() => handleArchiveCompetency(comp.id)} style={{ padding: '4px 12px', background: comp.isArchived ? '#3E503A' : '#333F50', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }} onMouseEnter={(e) => e.target.style.background = comp.isArchived ? '#4A6A4A' : '#4A5A70'} onMouseLeave={(e) => e.target.style.background = comp.isArchived ? '#3E503A' : '#333F50'}>{comp.isArchived ? 'Разархивировать' : 'Архивировать'}</button>}
+                        {!comp.isArchived && hasPermission('competencies.delete') && <button onClick={() => handleDeleteCompetency(comp.id)} style={{ padding: '4px 12px', background: '#4E1717', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }} onMouseEnter={(e) => e.target.style.background = '#6E2727'} onMouseLeave={(e) => e.target.style.background = '#4E1717'}>Удалить</button>}
                       </div>
                     </td>
                   </tr>
@@ -1694,9 +1741,9 @@ function App() {
                   <p style={{ fontSize: '14px', color: '#6A7787', marginTop: '4px' }}>{vacancy.shortDescription}</p>
                 </div>
                 <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-                  {!vacancy.isArchived && <button onClick={() => openEditVacancyModal(vacancy)} style={{ padding: '4px 12px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Редактировать</button>}
-                  <button onClick={() => handleArchiveVacancy(vacancy.id)} style={{ padding: '4px 12px', background: vacancy.isArchived ? '#3E503A' : '#333F50', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }} onMouseEnter={(e) => e.target.style.background = vacancy.isArchived ? '#4A6A4A' : '#4A5A70'} onMouseLeave={(e) => e.target.style.background = vacancy.isArchived ? '#3E503A' : '#333F50'}>{vacancy.isArchived ? 'Разархивировать' : 'Архивировать'}</button>
-                  {!vacancy.isArchived && <button onClick={() => handleDeleteVacancy(vacancy.id)} style={{ padding: '4px 12px', background: '#4E1717', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }} onMouseEnter={(e) => e.target.style.background = '#6E2727'} onMouseLeave={(e) => e.target.style.background = '#4E1717'}>Удалить</button>}
+                  {!vacancy.isArchived && hasPermission('vacancies.edit') && <button onClick={() => openEditVacancyModal(vacancy)} style={{ padding: '4px 12px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Редактировать</button>}
+                  {hasPermission('vacancies.archive') && <button onClick={() => handleArchiveVacancy(vacancy.id)} style={{ padding: '4px 12px', background: vacancy.isArchived ? '#3E503A' : '#333F50', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }} onMouseEnter={(e) => e.target.style.background = vacancy.isArchived ? '#4A6A4A' : '#4A5A70'} onMouseLeave={(e) => e.target.style.background = vacancy.isArchived ? '#3E503A' : '#333F50'}>{vacancy.isArchived ? 'Разархивировать' : 'Архивировать'}</button>}
+                  {!vacancy.isArchived && hasPermission('vacancies.delete') && <button onClick={() => handleDeleteVacancy(vacancy.id)} style={{ padding: '4px 12px', background: '#4E1717', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }} onMouseEnter={(e) => e.target.style.background = '#6E2727'} onMouseLeave={(e) => e.target.style.background = '#4E1717'}>Удалить</button>}
                 </div>
               </div>
 
@@ -1816,7 +1863,7 @@ function App() {
                       <span style={{ color: '#6A7787', fontSize: '12px', marginLeft: '12px' }}>{i.status}</span>
                     </div>
                     <button
-                      onClick={() => handleArchiveInterview(i.id)}
+                      onClick={() => handleUnarchiveInterview(i.id)}
                       style={{ padding: '4px 12px', background: '#3E503A', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }}
                       onMouseEnter={(e) => e.target.style.background = '#4A6A4A'}
                       onMouseLeave={(e) => e.target.style.background = '#3E503A'}
@@ -2113,7 +2160,7 @@ function App() {
       <div style={{ padding: '24px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}><h1 style={{ fontSize: '28px', fontWeight: '700', color: '#ffffff' }}>Пользователи</h1><span style={{ fontSize: '16px', color: '#6A7787' }}>Всего: {users.length}</span></div>
-          <button onClick={openAddUserModal} style={{ padding: '8px 20px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Добавить пользователя</button>
+          {hasPermission('users.create') && <button onClick={openAddUserModal} style={{ padding: '8px 20px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Добавить пользователя</button>}
         </div>
 
         {/* Табы */}
@@ -2139,8 +2186,8 @@ function App() {
                   <td style={{ padding: '12px 16px', color: '#ffffff', fontSize: '14px' }}><span style={{ padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '600', display: 'inline-block', background: userRoleObj?.color || '#6A7787', color: userRoleObj?.textColor || '#ffffff' }}>{userRoleObj?.name || user.role}</span></td>
                   <td style={{ padding: '12px 16px', color: '#ffffff', fontSize: '14px' }}>
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                      <button onClick={() => openEditUserModal(user)} style={{ padding: '4px 12px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Редактировать</button>
-                      <button onClick={() => handleDeleteUser(user.id)} style={{ padding: '4px 12px', background: '#4E1717', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }} onMouseEnter={(e) => e.target.style.background = '#6E2727'} onMouseLeave={(e) => e.target.style.background = '#4E1717'}>Удалить</button>
+                      {hasPermission('users.edit') && <button onClick={() => openEditUserModal(user)} style={{ padding: '4px 12px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Редактировать</button>}
+                      {hasPermission('users.delete') && <button onClick={() => handleDeleteUser(user.id)} style={{ padding: '4px 12px', background: '#4E1717', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }} onMouseEnter={(e) => e.target.style.background = '#6E2727'} onMouseLeave={(e) => e.target.style.background = '#4E1717'}>Удалить</button>}
                     </div>
                   </td>
                 </tr>);
@@ -2174,8 +2221,12 @@ function App() {
   const renderDashboardPage = () => {
     const getButtons = () => {
       if (userRole === 'reshala') return ['Список кандидатов', 'Список собеседований', 'Ожидают решения'];
-      const btns = ['Добавить кандидата', 'Запланировать собеседование', 'Создать вакансию', 'Просмотр действий'];
-      if (userRole === 'admin') btns.push('Пользователи');
+      const btns = [];
+      if (hasPermission('candidates.create')) btns.push('Добавить кандидата');
+      if (hasPermission('interviews.create')) btns.push('Запланировать собеседование');
+      if (hasPermission('vacancies.create')) btns.push('Создать вакансию');
+      if (hasPermission('logs.view')) btns.push('Просмотр действий');
+      if (hasPermission('users.view')) btns.push('Пользователи');
       return btns;
     };
     
@@ -2195,8 +2246,8 @@ function App() {
             if (label === 'Добавить кандидата') return <button key={idx} onClick={() => setShowAddModal(true)} style={{ padding: '8px 18px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', fontSize: '13px', color: '#ffffff', cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#11171F'}>{label}</button>;
             if (label === 'Запланировать собеседование') return <button key={idx} onClick={() => setShowScheduleModal(true)} style={{ padding: '8px 18px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', fontSize: '13px', color: '#ffffff', cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#11171F'}>{label}</button>;
             if (label === 'Создать вакансию') return <button key={idx} onClick={() => openAddVacancyModal()} style={{ padding: '8px 18px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', fontSize: '13px', color: '#ffffff', cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#11171F'}>{label}</button>;
-            if (label === 'Просмотр действий') return <button key={idx} onClick={() => setCurrentPage('logs')} style={{ padding: '8px 18px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', fontSize: '13px', color: '#ffffff', cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#11171F'}>{label}</button>;
-            if (label === 'Пользователи') return <button key={idx} onClick={() => setCurrentPage('users')} style={{ padding: '8px 18px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', fontSize: '13px', color: '#ffffff', cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#11171F'}>{label}</button>;
+            if (label === 'Просмотр действий') return <button key={idx} onClick={() => navigate('logs')} style={{ padding: '8px 18px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', fontSize: '13px', color: '#ffffff', cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#11171F'}>{label}</button>;
+            if (label === 'Пользователи') return <button key={idx} onClick={() => navigate('users')} style={{ padding: '8px 18px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', fontSize: '13px', color: '#ffffff', cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#11171F'}>{label}</button>;
             return <button key={idx} style={{ padding: '8px 18px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', fontSize: '13px', color: '#ffffff', cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#11171F'}>{label}</button>;
           })}
         </div>
@@ -2263,16 +2314,16 @@ function App() {
 
   // --- МЕНЮ ---
   const menuItems = [
-    { path: 'dashboard', label: 'Главная' },
-    { path: 'candidates', label: 'Кандидаты' },
-    { path: 'interviews', label: 'Собеседования' },
-    { path: 'matrix', label: 'Компетенции' },
-    { path: 'vacancies', label: 'Вакансии' },
-    { path: 'logs', label: 'Журнал изменений' },
-    { path: 'archive', label: 'Архив' },
+    { path: 'dashboard', label: 'Главная', perm: 'dashboard.view' },
+    { path: 'candidates', label: 'Кандидаты', perm: 'candidates.view' },
+    { path: 'interviews', label: 'Собеседования', perm: 'interviews.view' },
+    { path: 'matrix', label: 'Компетенции', perm: 'competencies.view' },
+    { path: 'vacancies', label: 'Вакансии', perm: 'vacancies.view' },
+    { path: 'logs', label: 'Журнал изменений', perm: 'logs.view' },
+    { path: 'archive', label: 'Архив', perm: 'archive.view' },
   ];
-  if (userRole === 'admin') {
-    menuItems.splice(1, 0, { path: 'users', label: 'Пользователи' });
+  if (hasPermission('users.view')) {
+    menuItems.splice(1, 0, { path: 'users', label: 'Пользователи', perm: 'users.view' });
   }
 
   // --- РЕНДЕР СТРАНИЦЫ ---
@@ -2315,7 +2366,7 @@ function App() {
             </div>
             <nav style={{ padding: '16px 12px' }}>
               {menuItems.map((item) => (
-                <div key={item.path} onClick={() => { setCurrentPage(item.path); setIsMenuOpen(false); }} style={{ display: 'block', padding: '10px 12px', borderRadius: '8px', color: '#ffffff', cursor: 'pointer', transition: 'background 0.2s', marginBottom: '4px', fontSize: '15px', fontWeight: '500', background: currentPage === item.path ? '#4F4F50' : 'transparent' }} onMouseEnter={(e) => { if (currentPage !== item.path) e.target.style.background = 'rgba(255,255,255,0.05)'; }} onMouseLeave={(e) => { if (currentPage !== item.path) e.target.style.background = 'transparent'; }}>{item.label}</div>
+                <div key={item.path} onClick={() => { navigate(item.path); setIsMenuOpen(false); }} style={{ display: 'block', padding: '10px 12px', borderRadius: '8px', color: '#ffffff', cursor: 'pointer', transition: 'background 0.2s', marginBottom: '4px', fontSize: '15px', fontWeight: '500', background: currentPage === item.path ? '#4F4F50' : 'transparent' }} onMouseEnter={(e) => { if (currentPage !== item.path) e.target.style.background = 'rgba(255,255,255,0.05)'; }} onMouseLeave={(e) => { if (currentPage !== item.path) e.target.style.background = 'transparent'; }}>{item.label}</div>
               ))}
             </nav>
             <div style={{ padding: '16px 20px', borderTop: '1px solid #6A7787', fontSize: '12px', color: '#6A7787', textAlign: 'center', position: 'absolute', bottom: 0, left: 0, right: 0 }}>v1.0.0</div>

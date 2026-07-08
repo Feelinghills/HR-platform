@@ -120,6 +120,7 @@ public sealed class Interview
     public InterviewStatus Status { get; set; } = InterviewStatus.Planned;
     public InterviewDecision Decision { get; set; } = InterviewDecision.Pending;
     public string? Comments { get; set; }
+    public bool IsArchived { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public ICollection<CompetencyMatrix> Matrices { get; set; } = new List<CompetencyMatrix>();

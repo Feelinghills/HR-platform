@@ -96,6 +96,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(32).IsRequired();
             entity.Property(x => x.Decision).HasConversion<string>().HasMaxLength(32).IsRequired();
             entity.Property(x => x.Comments).HasMaxLength(2048);
+            entity.Property(x => x.IsArchived).HasDefaultValue(false);
             entity.HasOne(x => x.Candidate)
                 .WithMany(x => x.Interviews)
                 .HasForeignKey(x => x.CandidateId)

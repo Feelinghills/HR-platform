@@ -276,6 +276,11 @@ namespace InterviewPlatform.Infrastructure.Migrations
                     b.Property<Guid>("InterviewerId")
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("IsArchived")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<DateTime>("PlannedDate")
                         .HasColumnType("timestamp with time zone");
 

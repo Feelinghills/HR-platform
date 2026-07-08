@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace InterviewPlatform.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260707233314_InitialCreate")]
+    [Migration("20260708051821_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -278,6 +278,11 @@ namespace InterviewPlatform.Infrastructure.Migrations
 
                     b.Property<Guid>("InterviewerId")
                         .HasColumnType("uuid");
+
+                    b.Property<bool>("IsArchived")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
 
                     b.Property<DateTime>("PlannedDate")
                         .HasColumnType("timestamp with time zone");

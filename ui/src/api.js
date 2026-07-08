@@ -124,6 +124,10 @@ const api = {
     apiFetch(`/interviews/${id}/matrix`, { method: 'PUT', body: JSON.stringify(data) }),
   decideInterview: (id, data) =>
     apiFetch(`/interviews/${id}/decision`, { method: 'POST', body: JSON.stringify(data) }),
+  archiveInterview: (id) =>
+    apiFetch(`/interviews/${id}/archive`, { method: 'POST' }),
+  unarchiveInterview: (id) =>
+    apiFetch(`/interviews/${id}/unarchive`, { method: 'POST' }),
 
   // Users
   getUsers: () => apiFetch('/users'),
@@ -131,6 +135,8 @@ const api = {
     apiFetch('/users', { method: 'POST', body: JSON.stringify(data) }),
   setUserStatus: (id, isActive) =>
     apiFetch(`/users/${id}/status`, { method: 'PATCH', body: JSON.stringify({ isActive }) }),
+  updateUser: (id, data) =>
+    apiFetch(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteUser: (id, reason) =>
     apiFetch(`/users/${id}/delete`, {
       method: 'POST',
@@ -250,6 +256,11 @@ export function mapVacancyToApi(data) {
 
 export function mapInterviewFromApi(dto) {
   const dateObj = new Date(dto.plannedDate);
+  const status = statusLabels[dto.status] || dto.status;
+  let decision = decisionLabels[dto.decision] || dto.decision;
+  if (status === 'Отменено' && decision === 'Ожидает') {
+    decision = 'Без решения';
+  }
   return {
     id: dto.id,
     candidateId: dto.candidateId,
@@ -260,8 +271,8 @@ export function mapInterviewFromApi(dto) {
     interviewer: dto.interviewerName,
     date: dateObj.toISOString().split('T')[0],
     time: dateObj.toTimeString().slice(0, 5),
-    status: statusLabels[dto.status] || dto.status,
-    decision: decisionLabels[dto.decision] || dto.decision,
+    status: status,
+    decision: decision,
     isArchived: dto.isArchived,
     comments: dto.comments || '',
     matrix: dto.matrix || [],

@@ -60,6 +60,13 @@ public sealed class UsersController(IAuthService authService) : ControllerBase
     }
 
     [Authorize(Roles = "Admin")]
+    [HttpPut("{id:guid}")]
+    public async Task<ActionResult<UserDto>> Update(Guid id, UpdateUserRequest request, CancellationToken cancellationToken)
+    {
+        return Ok(await authService.UpdateUserAsync(id, request, User.GetUserId(), cancellationToken));
+    }
+
+    [Authorize(Roles = "Admin")]
     [HttpPost("{id:guid}/delete")]
     public async Task<IActionResult> Delete(Guid id, DeleteRequest request, CancellationToken cancellationToken)
     {
@@ -315,6 +322,20 @@ public sealed class InterviewsController(IInterviewService interviewService) : C
     public async Task<ActionResult<InterviewDto>> UpdateStatus(Guid id, UpdateInterviewStatusRequest request, CancellationToken cancellationToken)
     {
         return Ok(await interviewService.UpdateStatusAsync(id, request, User.GetUserId(), cancellationToken));
+    }
+
+    [Authorize(Roles = "Admin,HR")]
+    [HttpPost("{id:guid}/archive")]
+    public async Task<ActionResult<InterviewDto>> Archive(Guid id, CancellationToken cancellationToken)
+    {
+        return Ok(await interviewService.ArchiveAsync(id, User.GetUserId(), cancellationToken));
+    }
+
+    [Authorize(Roles = "Admin,HR")]
+    [HttpPost("{id:guid}/unarchive")]
+    public async Task<ActionResult<InterviewDto>> Unarchive(Guid id, CancellationToken cancellationToken)
+    {
+        return Ok(await interviewService.UnarchiveAsync(id, User.GetUserId(), cancellationToken));
     }
 
     [Authorize(Roles = "Admin,HR")]

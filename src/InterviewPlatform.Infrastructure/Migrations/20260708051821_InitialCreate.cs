@@ -209,6 +209,7 @@ namespace InterviewPlatform.Infrastructure.Migrations
                     Status = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
                     Decision = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
                     Comments = table.Column<string>(type: "character varying(2048)", maxLength: 2048, nullable: true),
+                    IsArchived = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>

@@ -83,6 +83,21 @@ public sealed class AuthService(
         return Map(user);
     }
 
+    public async Task<UserDto> UpdateUserAsync(Guid id, UpdateUserRequest request, Guid? performedById, CancellationToken cancellationToken = default)
+    {
+        var user = await unitOfWork.Users.GetByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException("Пользователь не найден.");
+
+        if (request.FullName is not null) user.FullName = request.FullName.Trim();
+        if (request.Email is not null) user.Email = NormalizeEmail(request.Email);
+        if (request.Role.HasValue) user.Role = request.Role.Value;
+
+        unitOfWork.Users.Update(user);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return Map(user);
+    }
+
     public Task<IReadOnlyList<UserDto>> ListUsersAsync(CancellationToken cancellationToken = default)
     {
         var users = unitOfWork.Users.Query()
@@ -805,6 +820,10 @@ public sealed class InterviewService(IUnitOfWork unitOfWork, IAuditService audit
 
         interview.Status = request.Status;
         interview.Comments = request.Comments ?? interview.Comments;
+        if (request.Decision.HasValue)
+        {
+            interview.Decision = request.Decision.Value;
+        }
 
         unitOfWork.Interviews.Update(interview);
         await auditService.LogAsync("Interview", id, "SetStatus", oldValues, new { interview.Status, interview.Comments }, performedById, cancellationToken);
@@ -900,6 +919,7 @@ public sealed class InterviewService(IUnitOfWork unitOfWork, IAuditService audit
         x.Decision,
         x.Comments,
         x.CreatedAt,
+        x.IsArchived,
         x.Matrices
             .OrderBy(m => m.Competency == null ? string.Empty : m.Competency.Category)
             .ThenBy(m => m.Competency == null ? string.Empty : m.Competency.Name)
@@ -914,6 +934,34 @@ public sealed class InterviewService(IUnitOfWork unitOfWork, IAuditService audit
                 m.EvaluatedById,
                 m.EvaluatedAt))
             .ToList()));
+
+    public async Task<InterviewDto> ArchiveAsync(Guid id, Guid? performedById, CancellationToken cancellationToken = default)
+    {
+        var interview = await unitOfWork.Interviews.GetByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException("Собеседование не найдено.");
+        if (interview.IsArchived) throw new BusinessException("Собеседование уже в архиве.");
+
+        interview.IsArchived = true;
+        unitOfWork.Interviews.Update(interview);
+        await auditService.LogAsync("Interview", id, "Archive", null, new { interview.IsArchived }, performedById, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return await GetAsync(id, cancellationToken);
+    }
+
+    public async Task<InterviewDto> UnarchiveAsync(Guid id, Guid? performedById, CancellationToken cancellationToken = default)
+    {
+        var interview = await unitOfWork.Interviews.GetByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException("Собеседование не найдено.");
+        if (!interview.IsArchived) throw new BusinessException("Собеседование не в архиве.");
+
+        interview.IsArchived = false;
+        unitOfWork.Interviews.Update(interview);
+        await auditService.LogAsync("Interview", id, "Unarchive", null, new { interview.IsArchived }, performedById, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return await GetAsync(id, cancellationToken);
+    }
 }
 
 public sealed class ReportService(IUnitOfWork unitOfWork, IPdfService pdfService) : IReportService

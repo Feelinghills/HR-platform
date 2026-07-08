@@ -12,6 +12,8 @@ public sealed record UserDto(Guid Id, string Login, string Email, string FullNam
 
 public sealed record UpdateUserStatusRequest(bool IsActive);
 
+public sealed record UpdateUserRequest(string? FullName, string? Email, UserRole? Role);
+
 public sealed record CandidateDto(
     Guid Id,
     string FullName,
@@ -87,6 +89,7 @@ public sealed record InterviewDto(
     InterviewDecision Decision,
     string? Comments,
     DateTime CreatedAt,
+    bool IsArchived,
     IReadOnlyList<MatrixItemDto> Matrix);
 
 public sealed record CreateInterviewRequest(
@@ -96,7 +99,7 @@ public sealed record CreateInterviewRequest(
     DateTime PlannedDate,
     string? Comments);
 
-public sealed record UpdateInterviewStatusRequest(InterviewStatus Status, string? Comments);
+public sealed record UpdateInterviewStatusRequest(InterviewStatus Status, string? Comments, InterviewDecision? Decision = null);
 
 public sealed record DecideInterviewRequest(InterviewDecision Decision, string? Comments);
 
@@ -174,6 +177,7 @@ public interface IAuthService
 {
     Task<AuthResponse> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default);
     Task<UserDto> CreateUserAsync(RegisterUserRequest request, Guid? performedById, CancellationToken cancellationToken = default);
+    Task<UserDto> UpdateUserAsync(Guid id, UpdateUserRequest request, Guid? performedById, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<UserDto>> ListUsersAsync(CancellationToken cancellationToken = default);
     Task<UserDto> SetUserStatusAsync(Guid id, bool isActive, Guid? performedById, CancellationToken cancellationToken = default);
     Task DeleteUserAsync(Guid id, Guid? performedById, string? reason, CancellationToken cancellationToken = default);
@@ -230,6 +234,8 @@ public interface IInterviewService
     Task<InterviewDto> UpdateStatusAsync(Guid id, UpdateInterviewStatusRequest request, Guid? performedById, CancellationToken cancellationToken = default);
     Task<InterviewDto> DecideAsync(Guid id, DecideInterviewRequest request, Guid? performedById, CancellationToken cancellationToken = default);
     Task<InterviewDto> UpsertMatrixAsync(Guid id, UpsertMatrixRequest request, Guid? evaluatedById, CancellationToken cancellationToken = default);
+    Task<InterviewDto> ArchiveAsync(Guid id, Guid? performedById, CancellationToken cancellationToken = default);
+    Task<InterviewDto> UnarchiveAsync(Guid id, Guid? performedById, CancellationToken cancellationToken = default);
 }
 
 public interface IReportService
