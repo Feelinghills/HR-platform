@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
@@ -18,13 +20,62 @@ import (
 	"auth-service/internal/token"
 )
 
+// --- In-memory user cache ---
+
+type userCacheEntry struct {
+	user      *model.User
+	expiresAt time.Time
+}
+
+type userCache struct {
+	mu      sync.RWMutex
+	entries map[string]*userCacheEntry
+	ttl     time.Duration
+}
+
+func newUserCache(ttl time.Duration) *userCache {
+	return &userCache{
+		entries: make(map[string]*userCacheEntry),
+		ttl:     ttl,
+	}
+}
+
+func (c *userCache) Get(key string) *model.User {
+	c.mu.RLock()
+	entry, ok := c.entries[key]
+	c.mu.RUnlock()
+	if !ok || time.Now().After(entry.expiresAt) {
+		return nil
+	}
+	return entry.user
+}
+
+func (c *userCache) Set(key string, user *model.User) {
+	c.mu.Lock()
+	c.entries[key] = &userCacheEntry{user: user, expiresAt: time.Now().Add(c.ttl)}
+	c.mu.Unlock()
+}
+
+func (c *userCache) Invalidate(key string) {
+	c.mu.Lock()
+	delete(c.entries, key)
+	c.mu.Unlock()
+}
+
+// --- Auth service ---
+
 type AuthService struct {
-	repo *repository.UserRepository
-	jwt  *token.JWTManager
+	repo  *repository.UserRepository
+	jwt   *token.JWTManager
+	cache *userCache
 }
 
 func NewAuthService(repo *repository.UserRepository, jwt *token.JWTManager) *AuthService {
-	return &AuthService{repo: repo, jwt: jwt}
+	return &AuthService{
+		repo:  repo,
+		jwt:   jwt,
+		cache: newUserCache(5 * time.Minute),
+	}
 }
 
 // --- Password hashing compatible with C# PBKDF2 ---
@@ -38,17 +89,13 @@ func hashPasswordPBKDF2(password string) string {
 		base64.StdEncoding.EncodeToString(key))
 }
 
-// pbkdf2SHA256 implements PBKDF2-HMAC-SHA256 compatible with C# Rfc2898DeriveBytes
 func pbkdf2SHA256(password string, salt []byte, iterations, keyLen int) []byte {
 	return pbkdf2.Key([]byte(password), salt, iterations, keyLen, sha256.New)
 }
 
 func verifyPassword(password, hash string) bool {
 	if strings.HasPrefix(hash, "PBKDF2$") {
-		fmt.Printf("DEBUG: verifying PBKDF2, pw_len=%d, hash=%s\n", len(password), hash[:40])
-		result := verifyPBKDF2(password, hash)
-		fmt.Printf("DEBUG: PBKDF2 result=%v\n", result)
-		return result
+		return verifyPBKDF2(password, hash)
 	}
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
 }
@@ -82,20 +129,34 @@ func verifyPBKDF2(password, hash string) bool {
 	return true
 }
 
-// --- Business logic matching C# IAuthService ---
+// --- Business logic ---
 
 func (s *AuthService) Login(ctx context.Context, login, password string) (string, *model.User, error) {
-	fmt.Printf("DEBUG Login called: login=%s\n", login)
+	// Try cache first
+	cacheKey := strings.ToLower(login)
+	if cached := s.cache.Get(cacheKey); cached != nil {
+		if verifyPassword(password, cached.PasswordHash) {
+			tokenStr, err := s.jwt.GenerateAccessToken(cached.ID, cached.Email, cached.FullName, cached.Role)
+			if err != nil {
+				return "", nil, fmt.Errorf("generate token: %w", err)
+			}
+			return tokenStr, cached, nil
+		}
+		return "", nil, fmt.Errorf("неверный логин или пароль")
+	}
+
 	user, err := s.repo.FindByLoginOrEmail(ctx, login)
 	if err != nil {
-		fmt.Printf("DEBUG Login find user error: %v\n", err)
-		return "", nil, fmt.Errorf("Неверный логин или пароль.")
+		return "", nil, fmt.Errorf("неверный логин или пароль")
 	}
-	fmt.Printf("DEBUG Login user found: id=%s, hash_prefix=%s\n", user.ID, user.PasswordHash[:20])
+
 	if !verifyPassword(password, user.PasswordHash) {
-		fmt.Printf("DEBUG Login password mismatch\n")
-		return "", nil, fmt.Errorf("Неверный логин или пароль.")
+		return "", nil, fmt.Errorf("неверный логин или пароль")
 	}
+
+	// Cache user for faster subsequent logins
+	s.cache.Set(cacheKey, user)
+	s.cache.Set(strings.ToLower(user.Email), user)
 
 	tokenStr, err := s.jwt.GenerateAccessToken(user.ID, user.Email, user.FullName, user.Role)
 	if err != nil {
@@ -111,12 +172,12 @@ func (s *AuthService) Register(ctx context.Context, login, email, password, full
 
 	exists, _ := s.repo.LoginExists(ctx, login)
 	if exists {
-		return nil, fmt.Errorf("Пользователь с таким логином уже существует.")
+		return nil, fmt.Errorf("пользователь с таким логином уже существует")
 	}
 
 	exists, _ = s.repo.EmailExists(ctx, email)
 	if exists {
-		return nil, fmt.Errorf("Пользователь с таким email уже существует.")
+		return nil, fmt.Errorf("пользователь с таким email уже существует")
 	}
 
 	user := &model.User{
@@ -133,6 +194,10 @@ func (s *AuthService) Register(ctx context.Context, login, email, password, full
 		return nil, fmt.Errorf("create user: %w", err)
 	}
 
+	// Cache new user
+	s.cache.Set(login, user)
+	s.cache.Set(email, user)
+
 	return user, nil
 }
 
@@ -144,27 +209,31 @@ func (s *AuthService) SetUserStatus(ctx context.Context, id string, isActive boo
 	if err := s.repo.SetStatus(ctx, id, isActive); err != nil {
 		return nil, fmt.Errorf("set status: %w", err)
 	}
+	s.cache.Invalidate(id)
 	return s.repo.GetByID(ctx, id)
 }
 
 func (s *AuthService) DeleteUser(ctx context.Context, id, performedById, reason string) error {
 	user, err := s.repo.GetByID(ctx, id)
 	if err != nil {
-		return fmt.Errorf("Пользователь не найден.")
+		return fmt.Errorf("пользователь не найден")
 	}
 	if user.IsDeleted {
-		return fmt.Errorf("Пользователь уже удалён.")
+		return fmt.Errorf("пользователь уже удалён")
 	}
+	s.cache.Invalidate(strings.ToLower(user.Login))
+	s.cache.Invalidate(strings.ToLower(user.Email))
 	return s.repo.SoftDelete(ctx, id, performedById, reason)
 }
 
 func (s *AuthService) RestoreUser(ctx context.Context, id, performedById string) error {
 	user, err := s.repo.GetByID(ctx, id)
 	if err != nil {
-		return fmt.Errorf("Пользователь не найден.")
+		return fmt.Errorf("пользователь не найден")
 	}
 	if !user.IsDeleted {
-		return fmt.Errorf("Пользователь не удалён.")
+		return fmt.Errorf("пользователь не удалён")
 	}
+	s.cache.Invalidate(id)
 	return s.repo.Restore(ctx, id)
 }

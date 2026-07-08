@@ -19,14 +19,14 @@ services:
       timeout: 5s
       retries: 5
 
-  # Go Auth gRPC Service
+  # Go Auth Service (REST)
   auth-service:
     container_name: interview-platform-auth
     build:
       context: ./auth-service
       dockerfile: Dockerfile
     ports:
-      - "50051:50051"
+      - "50052:50052"
     environment:
       - SERVER_PORT=50051
       - POSTGRES_DSN=postgres://postgres:postgres@postgres:5432/interview_platform
@@ -51,7 +51,7 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=interview_platform;Username=postgres;Password=postgres
-      - GrpcAuth__Address=http://auth-service:50051
+      - RestAuth__BaseUrl=http://auth-service:50052/api
     depends_on:
       postgres:
         condition: service_healthy

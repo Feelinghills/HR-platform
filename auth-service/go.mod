@@ -1,11 +1,12 @@
 module auth-service
 
-go 1.25.5
+go 1.25.0
 
 require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
+	github.com/rs/cors v1.11.0
 	golang.org/x/crypto v0.53.0
 	google.golang.org/grpc v1.82.0
 	google.golang.org/protobuf v1.36.11

@@ -1,10 +1,11 @@
+const AUTH_API = 'http://localhost:50052/api';
 const API_BASE = '/api';
 
 function getToken() {
   return localStorage.getItem('token');
 }
 
-async function apiFetch(path, options = {}) {
+async function apiFetch(path, options = {}, baseUrl = API_BASE) {
   const token = getToken();
   const headers = {
     'Content-Type': 'application/json',
@@ -14,7 +15,7 @@ async function apiFetch(path, options = {}) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  const res = await fetch(`${baseUrl}${path}`, { ...options, headers });
 
   if (res.status === 401) {
     localStorage.removeItem('token');
@@ -40,9 +41,9 @@ const api = {
     apiFetch('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
-    }),
+    }, AUTH_API),
 
-  me: () => apiFetch('/auth/me'),
+  me: () => apiFetch('/auth/me', {}, AUTH_API),
 
   // Candidates
   getCandidates: (search, includeArchived) => {
@@ -125,19 +126,19 @@ const api = {
   decideInterview: (id, data) =>
     apiFetch(`/interviews/${id}/decision`, { method: 'POST', body: JSON.stringify(data) }),
 
-  // Users
-  getUsers: () => apiFetch('/users'),
+  // Users (Go auth-service)
+  getUsers: () => apiFetch('/users', {}, AUTH_API),
   createUser: (data) =>
-    apiFetch('/users', { method: 'POST', body: JSON.stringify(data) }),
+    apiFetch('/users', { method: 'POST', body: JSON.stringify(data) }, AUTH_API),
   setUserStatus: (id, isActive) =>
-    apiFetch(`/users/${id}/status`, { method: 'PATCH', body: JSON.stringify({ isActive }) }),
+    apiFetch(`/users/${id}/status`, { method: 'PATCH', body: JSON.stringify({ isActive }) }, AUTH_API),
   deleteUser: (id, reason) =>
     apiFetch(`/users/${id}/delete`, {
       method: 'POST',
       body: JSON.stringify({ reason: reason || null }),
-    }),
+    }, AUTH_API),
   restoreUser: (id) =>
-    apiFetch(`/users/${id}/restore`, { method: 'POST' }),
+    apiFetch(`/users/${id}/restore`, { method: 'POST' }, AUTH_API),
 
   // Audit
   getAudit: (entityType, entityId) => {
