@@ -87,6 +87,24 @@ public sealed class RestAuthService : IAuthService
         return user;
     }
 
+    public async Task<UserDto> UpdateUserAsync(Guid id, UpdateUserRequest request, Guid? performedById, CancellationToken cancellationToken = default)
+    {
+        var response = await _http.PutAsJsonAsync($"{_options.BaseUrl}/users/{id}", new
+        {
+            FullName = request.FullName,
+            Email = request.Email,
+            Role = request.Role?.ToString(),
+            PerformedById = performedById?.ToString() ?? ""
+        }, JsonOptions, cancellationToken);
+
+        response.EnsureSuccessStatusCode();
+
+        var user = await response.Content.ReadFromJsonAsync<UserDto>(JsonOptions, cancellationToken)
+            ?? throw new InvalidOperationException("Empty response from auth service");
+
+        return user;
+    }
+
     public async Task DeleteUserAsync(Guid id, Guid? performedById, string? reason, CancellationToken cancellationToken = default)
     {
         var response = await _http.PostAsJsonAsync($"{_options.BaseUrl}/users/{id}/delete", new

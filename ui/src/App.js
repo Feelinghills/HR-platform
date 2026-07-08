@@ -114,11 +114,14 @@ function App() {
 
   // --- СОСТОЯНИЯ ДЛЯ РОЛЕЙ И ПРАВ ---
   const [usersTab, setUsersTab] = useState('users'); // 'users' | 'roles'
-  const [roles, setRoles] = useState([
+  const defaultRoles = [
     { id: 'admin', name: 'Администратор', color: '#dbeafe', textColor: '#1d4ed8', permissions: ['candidates.view', 'candidates.create', 'candidates.edit', 'candidates.archive', 'candidates.delete', 'vacancies.view', 'vacancies.create', 'vacancies.edit', 'vacancies.archive', 'vacancies.delete', 'interviews.view', 'interviews.create', 'interviews.edit', 'interviews.decide', 'interviews.canInterview', 'matrix.view', 'matrix.edit', 'competencies.view', 'competencies.create', 'competencies.edit', 'competencies.archive', 'competencies.delete', 'users.view', 'users.create', 'users.edit', 'users.delete', 'logs.view', 'archive.view', 'dashboard.view'] },
     { id: 'hr', name: 'HR', color: '#d1fae5', textColor: '#065f46', permissions: ['candidates.view', 'candidates.create', 'candidates.edit', 'candidates.archive', 'vacancies.view', 'vacancies.create', 'vacancies.edit', 'vacancies.archive', 'interviews.view', 'interviews.create', 'interviews.edit', 'interviews.canInterview', 'matrix.view', 'matrix.edit', 'competencies.view', 'competencies.create', 'competencies.edit', 'competencies.archive', 'users.view', 'logs.view', 'archive.view', 'dashboard.view'] },
     { id: 'reshala', name: 'Согласующий', color: '#fef3c7', textColor: '#92400e', permissions: ['candidates.view', 'vacancies.view', 'interviews.view', 'interviews.decide', 'matrix.view', 'competencies.view', 'archive.view', 'dashboard.view'] },
-  ]);
+  ];
+  const [roles, setRoles] = useState(() => {
+    try { const saved = localStorage.getItem('hr_roles'); return saved ? JSON.parse(saved) : defaultRoles; } catch { return defaultRoles; }
+  });
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [editingRoleId, setEditingRoleId] = useState(null);
   const [roleFormData, setRoleFormData] = useState({ name: '', color: '#dbeafe', textColor: '#1d4ed8', permissions: [] });
@@ -127,8 +130,8 @@ function App() {
     'Кандидаты': ['candidates.view', 'candidates.create', 'candidates.edit', 'candidates.archive', 'candidates.delete'],
     'Вакансии': ['vacancies.view', 'vacancies.create', 'vacancies.edit', 'vacancies.archive', 'vacancies.delete'],
     'Собеседования': ['interviews.view', 'interviews.create', 'interviews.edit', 'interviews.decide', 'interviews.canInterview'],
-    'Компетенции': ['matrix.view', 'matrix.edit'],
-    'Компетенции': ['competencies.view', 'competencies.create', 'competencies.edit', 'competencies.archive', 'competencies.delete'],
+    'Компетенции (оценка)': ['matrix.view', 'matrix.edit'],
+    'Компетенции (справочник)': ['competencies.view', 'competencies.create', 'competencies.edit', 'competencies.archive', 'competencies.delete'],
     'Пользователи': ['users.view', 'users.create', 'users.edit', 'users.delete'],
     'Журнал': ['logs.view'],
     'Архив': ['archive.view'],
@@ -151,8 +154,8 @@ function App() {
     'interviews.edit': 'Редактирование собеседований',
     'interviews.decide': 'Принятие решений',
     'interviews.canInterview': 'Может быть интервьюером',
-    'matrix.view': 'Просмотр матрицы',
-    'matrix.edit': 'Редактирование матрицы',
+    'matrix.view': 'Просмотр оценок',
+    'matrix.edit': 'Редактирование оценок',
     'competencies.view': 'Просмотр компетенций',
     'competencies.create': 'Создание компетенций',
     'competencies.edit': 'Редактирование компетенций',
@@ -1050,6 +1053,11 @@ function App() {
     setShowRoleModal(false);
     if (step === 'main') loadData();
   }, [currentPage]);
+
+  // --- СОХРАНЕНИЕ РОЛЕЙ В localStorage ---
+  useEffect(() => {
+    localStorage.setItem('hr_roles', JSON.stringify(roles));
+  }, [roles]);
 
   // --- ОБНОВЛЕНИЕ ЖУРНАЛА ПРИ ОТКРЫТИИ ---
   useEffect(() => {

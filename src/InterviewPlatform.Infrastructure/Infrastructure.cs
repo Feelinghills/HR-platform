@@ -394,34 +394,7 @@ public static class DependencyInjection
 
     private static async Task SeedAsync(AppDbContext dbContext, IPasswordHasher passwordHasher)
     {
-        if (!dbContext.Users.Any())
-        {
-            dbContext.Users.AddRange(
-                new User
-                {
-                    Login = "admin",
-                    Email = "admin@example.com",
-                    FullName = "Администратор",
-                    Role = UserRole.Admin,
-                    PasswordHash = passwordHasher.Hash("Admin123!")
-                },
-                new User
-                {
-                    Login = "hr",
-                    Email = "hr@example.com",
-                    FullName = "Специалист отдела кадров",
-                    Role = UserRole.HR,
-                    PasswordHash = passwordHasher.Hash("Hr123!")
-                },
-                new User
-                {
-                    Login = "reshala",
-                    Email = "reshala@example.com",
-                    FullName = "Решала",
-                    Role = UserRole.DecisionMaker,
-                    PasswordHash = passwordHasher.Hash("Decision123!")
-                });
-        }
+        // Users are managed by the Go auth-service — no seed data here
 
         if (!dbContext.Vacancies.Any())
         {

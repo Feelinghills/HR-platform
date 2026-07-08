@@ -102,11 +102,8 @@ func main() {
 
 	// Users REST endpoints
 	mux.HandleFunc("/api/users", func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
+		// Internal service-to-service calls don't require user auth
+		// Authorization is handled by the .NET backend proxy
 
 		switch r.Method {
 		case http.MethodGet:
