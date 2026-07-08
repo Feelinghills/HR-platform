@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/crypto/pbkdf2"
 
 	"auth-service/internal/model"
 	"auth-service/internal/repository"
@@ -37,23 +38,17 @@ func hashPasswordPBKDF2(password string) string {
 		base64.StdEncoding.EncodeToString(key))
 }
 
+// pbkdf2SHA256 implements PBKDF2-HMAC-SHA256 compatible with C# Rfc2898DeriveBytes
 func pbkdf2SHA256(password string, salt []byte, iterations, keyLen int) []byte {
-	U := sha256.Sum256(append(salt, []byte(password)...))
-	T := make([]byte, keyLen)
-	copy(T, U[:])
-
-	for i := 1; i < iterations; i++ {
-		U = sha256.Sum256(U[:])
-		for j := 0; j < keyLen; j++ {
-			T[j] ^= U[j]
-		}
-	}
-	return T[:keyLen]
+	return pbkdf2.Key([]byte(password), salt, iterations, keyLen, sha256.New)
 }
 
 func verifyPassword(password, hash string) bool {
 	if strings.HasPrefix(hash, "PBKDF2$") {
-		return verifyPBKDF2(password, hash)
+		fmt.Printf("DEBUG: verifying PBKDF2, pw_len=%d, hash=%s\n", len(password), hash[:40])
+		result := verifyPBKDF2(password, hash)
+		fmt.Printf("DEBUG: PBKDF2 result=%v\n", result)
+		return result
 	}
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
 }
@@ -90,12 +85,15 @@ func verifyPBKDF2(password, hash string) bool {
 // --- Business logic matching C# IAuthService ---
 
 func (s *AuthService) Login(ctx context.Context, login, password string) (string, *model.User, error) {
+	fmt.Printf("DEBUG Login called: login=%s\n", login)
 	user, err := s.repo.FindByLoginOrEmail(ctx, login)
 	if err != nil {
+		fmt.Printf("DEBUG Login find user error: %v\n", err)
 		return "", nil, fmt.Errorf("Неверный логин или пароль.")
 	}
-
+	fmt.Printf("DEBUG Login user found: id=%s, hash_prefix=%s\n", user.ID, user.PasswordHash[:20])
 	if !verifyPassword(password, user.PasswordHash) {
+		fmt.Printf("DEBUG Login password mismatch\n")
 		return "", nil, fmt.Errorf("Неверный логин или пароль.")
 	}
 

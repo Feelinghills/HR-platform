@@ -13,13 +13,13 @@ public sealed class GrpcAuthOptions
 
 public sealed class GrpcAuthService : IAuthService, IDisposable
 {
-    private readonly Protos.Auth.AuthServiceClient _client;
+    private readonly Protos.AuthService.AuthServiceClient _client;
     private readonly GrpcChannel _channel;
 
     public GrpcAuthService(IOptions<GrpcAuthOptions> options)
     {
         _channel = GrpcChannel.ForAddress(options.Value.Address);
-        _client = new Protos.Auth.AuthServiceClient(_channel);
+        _client = new Protos.AuthService.AuthServiceClient(_channel);
     }
 
     public async Task<AuthResponse> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default)

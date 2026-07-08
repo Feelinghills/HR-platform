@@ -29,7 +29,7 @@ services:
       - "50051:50051"
     environment:
       - SERVER_PORT=50051
-      - POSTGRES_DSN=Host=postgres;Port=5432;Database=interview_platform;Username=postgres;Password=postgres
+      - POSTGRES_DSN=postgres://postgres:postgres@postgres:5432/interview_platform
       - JWT_SECRET=InterviewPlatformPracticeSecret_ChangeForProduction_2026
       - JWT_ISSUER=InterviewPlatform
       - JWT_AUDIENCE=InterviewPlatform

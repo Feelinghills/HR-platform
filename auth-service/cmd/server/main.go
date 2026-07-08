@@ -52,14 +52,17 @@ func main() {
 }
 
 func (s *authServer) Login(ctx context.Context, req *pb.LoginRequest) (*pb.LoginResponse, error) {
+	fmt.Printf("DEBUG Login handler called: login=%s\n", req.Login)
 	if req.Login == "" || req.Password == "" {
 		return nil, status.Error(codes.InvalidArgument, "login and password are required")
 	}
 
 	tokenStr, user, err := s.svc.Login(ctx, req.Login, req.Password)
 	if err != nil {
+		fmt.Printf("DEBUG Login error: %v\n", err)
 		return nil, status.Error(codes.Unauthenticated, err.Error())
 	}
+	fmt.Printf("DEBUG Login success: user=%s\n", user.Login)
 
 	return &pb.LoginResponse{
 		Token: tokenStr,
