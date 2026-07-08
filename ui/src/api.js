@@ -119,6 +119,8 @@ const api = {
   },
   createInterview: (data) =>
     apiFetch('/interviews', { method: 'POST', body: JSON.stringify(data) }),
+  updateInterview: (id, data) =>
+    apiFetch(`/interviews/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   updateInterviewStatus: (id, data) =>
     apiFetch(`/interviews/${id}/status`, { method: 'PATCH', body: JSON.stringify(data) }),
   upsertMatrix: (id, data) =>
@@ -271,7 +273,7 @@ export function mapInterviewFromApi(dto) {
     interviewerId: dto.interviewerId,
     interviewer: dto.interviewerName,
     date: dateObj.toISOString().split('T')[0],
-    time: dateObj.toTimeString().slice(0, 5),
+    time: dateObj.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', hour12: false }),
     status: status,
     decision: decision,
     isArchived: dto.isArchived,
@@ -297,7 +299,7 @@ export function mapUserFromApi(dto) {
 export function mapAuditFromApi(dto) {
   const dateObj = new Date(dto.performedAt);
   const mskTime = new Date(dateObj.getTime() + 3 * 60 * 60 * 1000);
-  const dateStr = mskTime.toISOString().replace('T', ' ').slice(0, 16);
+  const dateStr = dateObj.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   const areaMap = {
     Candidate: 'Кандидаты',
     Vacancy: 'Вакансии',

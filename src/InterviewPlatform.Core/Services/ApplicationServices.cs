@@ -811,6 +811,26 @@ public sealed class InterviewService(IUnitOfWork unitOfWork, IAuditService audit
         return await GetAsync(interview.Id, cancellationToken);
     }
 
+    public async Task<InterviewDto> UpdateAsync(Guid id, UpdateInterviewRequest request, Guid? performedById, CancellationToken cancellationToken = default)
+    {
+        var interview = await unitOfWork.Interviews.GetByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException("Собеседование не найдено.");
+
+        var oldValues = new { interview.CandidateId, interview.VacancyId, interview.InterviewerId, interview.PlannedDate, interview.Comments };
+
+        interview.CandidateId = request.CandidateId;
+        interview.VacancyId = request.VacancyId;
+        interview.InterviewerId = request.InterviewerId;
+        interview.PlannedDate = request.PlannedDate;
+        interview.Comments = request.Comments ?? interview.Comments;
+
+        unitOfWork.Interviews.Update(interview);
+        await auditService.LogAsync("Interview", id, "Update", oldValues, new { interview.CandidateId, interview.VacancyId, interview.InterviewerId, interview.PlannedDate }, performedById, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return await GetAsync(id, cancellationToken);
+    }
+
     public async Task<InterviewDto> UpdateStatusAsync(Guid id, UpdateInterviewStatusRequest request, Guid? performedById, CancellationToken cancellationToken = default)
     {
         var interview = await unitOfWork.Interviews.GetByIdAsync(id, cancellationToken)

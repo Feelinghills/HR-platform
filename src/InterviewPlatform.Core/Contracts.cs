@@ -101,6 +101,13 @@ public sealed record CreateInterviewRequest(
 
 public sealed record UpdateInterviewStatusRequest(InterviewStatus Status, string? Comments, InterviewDecision? Decision = null);
 
+public sealed record UpdateInterviewRequest(
+    Guid CandidateId,
+    Guid VacancyId,
+    Guid InterviewerId,
+    DateTime PlannedDate,
+    string? Comments);
+
 public sealed record DecideInterviewRequest(InterviewDecision Decision, string? Comments);
 
 public sealed record DeleteRequest(string? Reason);
@@ -231,6 +238,7 @@ public interface IInterviewService
 
     Task<InterviewDto> GetAsync(Guid id, CancellationToken cancellationToken = default);
     Task<InterviewDto> CreateAsync(CreateInterviewRequest request, Guid? performedById, CancellationToken cancellationToken = default);
+    Task<InterviewDto> UpdateAsync(Guid id, UpdateInterviewRequest request, Guid? performedById, CancellationToken cancellationToken = default);
     Task<InterviewDto> UpdateStatusAsync(Guid id, UpdateInterviewStatusRequest request, Guid? performedById, CancellationToken cancellationToken = default);
     Task<InterviewDto> DecideAsync(Guid id, DecideInterviewRequest request, Guid? performedById, CancellationToken cancellationToken = default);
     Task<InterviewDto> UpsertMatrixAsync(Guid id, UpsertMatrixRequest request, Guid? evaluatedById, CancellationToken cancellationToken = default);

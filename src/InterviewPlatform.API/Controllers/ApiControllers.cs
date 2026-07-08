@@ -318,6 +318,13 @@ public sealed class InterviewsController(IInterviewService interviewService) : C
     }
 
     [Authorize(Roles = "Admin,HR")]
+    [HttpPut("{id:guid}")]
+    public async Task<ActionResult<InterviewDto>> Update(Guid id, UpdateInterviewRequest request, CancellationToken cancellationToken)
+    {
+        return Ok(await interviewService.UpdateAsync(id, request, User.GetUserId(), cancellationToken));
+    }
+
+    [Authorize(Roles = "Admin,HR")]
     [HttpPatch("{id:guid}/status")]
     public async Task<ActionResult<InterviewDto>> UpdateStatus(Guid id, UpdateInterviewStatusRequest request, CancellationToken cancellationToken)
     {

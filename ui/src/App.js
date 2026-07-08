@@ -738,21 +738,28 @@ function App() {
       date: interview.date,
       time: interview.time,
       interviewer: interview.interviewerId,
-      status: interview.status
+      candidateId: interview.candidateId,
+      vacancyId: interview.vacancyId,
+      comments: interview.comments || '',
     });
   };
 
   const saveEditInterview = async () => {
     try {
-      const plannedDate = new Date(`${editInterviewData.date}T${editInterviewData.time}`).toISOString();
-      const statusApi = statusValues[editInterviewData.status] || 'Planned';
-      const updated = await api.updateInterviewStatus(editingInterviewId, {
-        status: statusApi,
-        comments: '',
+      const plannedDate = new Date(`${editInterviewData.date}T${editInterviewData.time || '00:00'}`).toISOString();
+      const updated = await api.updateInterview(editingInterviewId, {
+        candidateId: editInterviewData.candidateId,
+        vacancyId: editInterviewData.vacancyId,
+        interviewerId: editInterviewData.interviewer,
+        plannedDate: plannedDate,
+        comments: editInterviewData.comments || '',
       });
       setInterviews(interviews.map(i =>
         i.id === editingInterviewId ? mapInterviewFromApi(updated) : i
       ));
+      if (selectedInterview && selectedInterview.id === editingInterviewId) {
+        setSelectedInterview(mapInterviewFromApi(updated));
+      }
       setEditingInterviewId(null);
       setEditInterviewData({});
     } catch (err) {
@@ -789,7 +796,7 @@ function App() {
   const handleScheduleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const plannedDate = new Date(`${newInterview.date}T${newInterview.time}`).toISOString();
+      const plannedDate = new Date(`${newInterview.date}T${newInterview.time || '00:00'}`).toISOString();
 
       const dto = {
         candidateId: newInterview.candidateId,
@@ -1493,7 +1500,7 @@ function App() {
                   <td style={{ padding: '12px 16px', color: '#ffffff', fontSize: '14px', textAlign: 'center' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'center' }}>
                       {!interview.isArchived && <button onClick={() => openInterviewCard(interview)} style={{ padding: '4px 16px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', width: '100%', maxWidth: '140px' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Открыть карточку</button>}
-                      {isHRorAdmin && editingInterviewId !== interview.id && !interview.isArchived && <button onClick={() => startEditInterview(interview)} style={{ padding: '4px 16px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', width: '100%', maxWidth: '140px' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Редактировать</button>}
+                      {hasPermission('interviews.edit') && editingInterviewId !== interview.id && !interview.isArchived && <button onClick={() => startEditInterview(interview)} style={{ padding: '4px 16px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', width: '100%', maxWidth: '140px' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Редактировать</button>}
                       {editingInterviewId === interview.id && (<><button onClick={saveEditInterview} style={{ padding: '4px 16px', background: '#3E503A', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', width: '100%', maxWidth: '140px' }} onMouseEnter={(e) => e.target.style.background = '#4A6A4A'} onMouseLeave={(e) => e.target.style.background = '#3E503A'}>Сохранить</button><button onClick={cancelEditInterview} style={{ padding: '4px 16px', background: '#4E1717', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', width: '100%', maxWidth: '140px' }} onMouseEnter={(e) => e.target.style.background = '#6E2727'} onMouseLeave={(e) => e.target.style.background = '#4E1717'}>Отмена</button></>)}
                       {isHRorAdmin && editingInterviewId !== interview.id && <button onClick={() => interview.isArchived ? handleUnarchiveInterview(interview.id) : handleArchiveInterview(interview.id)} style={{ padding: '4px 16px', background: interview.isArchived ? '#3E503A' : '#333F50', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', width: '100%', maxWidth: '140px' }} onMouseEnter={(e) => e.target.style.background = interview.isArchived ? '#4A6A4A' : '#4A5A70'} onMouseLeave={(e) => e.target.style.background = interview.isArchived ? '#3E503A' : '#333F50'}>{interview.isArchived ? 'Разархивировать' : 'Архивировать'}</button>}
                     </div>
@@ -2334,6 +2341,7 @@ function App() {
   if (hasPermission('users.view')) {
     menuItems.splice(1, 0, { path: 'users', label: 'Пользователи', perm: 'users.view' });
   }
+  const visibleMenuItems = menuItems.filter(item => hasPermission(item.perm));
 
   // --- РЕНДЕР СТРАНИЦЫ ---
   const renderPage = () => {
@@ -2374,7 +2382,7 @@ function App() {
               <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#ffffff' }}>Меню</h2>
             </div>
             <nav style={{ padding: '16px 12px' }}>
-              {menuItems.map((item) => (
+              {visibleMenuItems.map((item) => (
                 <div key={item.path} onClick={() => { navigate(item.path); setIsMenuOpen(false); }} style={{ display: 'block', padding: '10px 12px', borderRadius: '8px', color: '#ffffff', cursor: 'pointer', transition: 'background 0.2s', marginBottom: '4px', fontSize: '15px', fontWeight: '500', background: currentPage === item.path ? '#4F4F50' : 'transparent' }} onMouseEnter={(e) => { if (currentPage !== item.path) e.target.style.background = 'rgba(255,255,255,0.05)'; }} onMouseLeave={(e) => { if (currentPage !== item.path) e.target.style.background = 'transparent'; }}>{item.label}</div>
               ))}
             </nav>
