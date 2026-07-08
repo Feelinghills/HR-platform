@@ -37,8 +37,9 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.Configure<RestAuthOptions>(builder.Configuration.GetSection(RestAuthOptions.SectionName));
+builder.Services.AddHttpClient<IAuthService, RestAuthService>();
 builder.Services.AddScoped<IAuditService, AuditService>();
-builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ICandidateService, CandidateService>();
 builder.Services.AddScoped<IVacancyService, VacancyService>();
 builder.Services.AddScoped<ICompetencyService, CompetencyService>();

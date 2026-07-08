@@ -19,6 +19,27 @@ services:
       timeout: 5s
       retries: 5
 
+  # Go Auth Service (REST)
+  auth-service:
+    container_name: interview-platform-auth
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    ports:
+      - "50051:50051"
+    environment:
+      - SERVER_PORT=50051
+      - POSTGRES_DSN=postgres://postgres:postgres@postgres:5432/interview_platform
+      - JWT_SECRET=InterviewPlatformPracticeSecret_ChangeForProduction_2026
+      - JWT_ISSUER=InterviewPlatform
+      - JWT_AUDIENCE=InterviewPlatform
+      - JWT_EXPIRY=120m
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - platform-network
+
   # Backend .NET 10
   backend:
     container_name: interview-platform-backend
@@ -30,9 +51,12 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=interview_platform;Username=postgres;Password=postgres
+      - RestAuth__BaseUrl=http://auth-service:50051/api
     depends_on:
       postgres:
         condition: service_healthy
+      auth-service:
+        condition: service_started
     networks:
       - platform-network
 
