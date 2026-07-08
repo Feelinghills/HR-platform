@@ -10,5 +10,5 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /auth-server ./cmd/server
 FROM alpine:3.20
 RUN apk add --no-cache ca-certificates
 COPY --from=builder /auth-server /auth-server
-EXPOSE 50051 50052
+EXPOSE 50051
 CMD ["/auth-server"]

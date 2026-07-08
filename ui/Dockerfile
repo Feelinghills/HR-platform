@@ -26,7 +26,7 @@ RUN echo 'server { \
         add_header Cache-Control "public, immutable"; \
     } \
     location /api/auth/ { \
-        proxy_pass http://auth-service:50052; \
+        proxy_pass http://auth-service:50051; \
         proxy_http_version 1.1; \
         proxy_set_header Host $host; \
         proxy_set_header X-Real-IP $remote_addr; \
