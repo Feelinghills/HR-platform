@@ -415,14 +415,15 @@ function App() {
     e.preventDefault();
     try {
       if (editingUserId) {
-        await api.updateUser(editingUserId, {
-          fullName: userFormData.name,
+        const updated = await api.updateUser(editingUserId, {
+          login: userFormData.login,
           email: userFormData.email || '',
+          fullName: userFormData.name,
           role: roleValues[userFormData.role] || 'HR',
+          password: userFormData.password || '',
         });
-        await api.setUserStatus(editingUserId, userFormData.isActive !== false);
         setUsers(users.map(u =>
-          u.id === editingUserId ? { ...u, ...userFormData } : u
+          u.id === editingUserId ? mapUserFromApi(updated) : u
         ));
       } else {
         const created = await api.createUser({
