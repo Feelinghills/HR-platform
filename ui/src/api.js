@@ -1,4 +1,4 @@
-const AUTH_API = 'http://localhost:50052/api';
+const AUTH_API = 'http://localhost:50051/api';
 const API_BASE = '/api';
 
 function getToken() {
