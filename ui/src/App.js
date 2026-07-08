@@ -960,7 +960,7 @@ function App() {
         transition: 'opacity 0.5s ease-out, transform 0.5s ease-out'
       }}>
         <div style={{ textAlign: 'center', animation: 'fadeInUp 0.6s ease-out' }}>
-          <img src="/logo.png" alt="Логотип" style={{ height: '80px', marginBottom: '32px', display: 'block', marginLeft: 'auto', marginRight: 'auto' }} />
+          <img src="/logo.png?v=2" alt="Логотип" style={{ height: '80px', marginBottom: '32px', display: 'block', marginLeft: 'auto', marginRight: 'auto' }} />
           <h1 style={{ fontSize: '36px', fontWeight: '700', color: '#ffffff', textAlign: 'center' }}>Здравствуйте, {userName}!</h1>
         </div>
       </div>
@@ -973,7 +973,7 @@ function App() {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', fontFamily: "'Unbounded', sans-serif", animation: 'fadeIn 0.3s ease-out' }}>
         <header style={{ display: 'flex', alignItems: 'center', height: '64px', padding: '0 24px', background: '#11171F', borderBottom: '1px solid #6A7787', position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><img src="/logo.png" alt="Логотип" style={{ height: '32px' }} /><span style={{ fontSize: '14px', fontWeight: '600', color: '#ffffff' }}>HR-platform</span></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><img src="/logo.png?v=2" alt="Логотип" style={{ height: '32px' }} /><span style={{ fontSize: '14px', fontWeight: '600', color: '#ffffff' }}>HR-platform</span></div>
         </header>
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flex: 1, padding: '80px 20px 20px' }}>
           <div style={{ background: '#171D24', padding: '48px 40px', borderRadius: '16px', boxShadow: '0 8px 32px rgba(0,0,0,0.3)', width: '100%', maxWidth: '400px', textAlign: 'center', position: 'relative' }}>
@@ -997,7 +997,7 @@ function App() {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', fontFamily: "'Unbounded', sans-serif" }}>
         <header style={{ display: 'flex', alignItems: 'center', height: '64px', padding: '0 24px', background: '#11171F', borderBottom: '1px solid #6A7787', flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><img src="/logo.png" alt="Логотип" style={{ height: '64px' }} /><span style={{ fontSize: '14px', fontWeight: '600', color: '#ffffff' }}>HR-platform</span></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><img src="/logo.png?v=2" alt="Логотип" style={{ height: '64px' }} /><span style={{ fontSize: '14px', fontWeight: '600', color: '#ffffff' }}>HR-platform</span></div>
         </header>
         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', flex: 1, padding: '20px' }}>
           <h1 style={{ fontSize: '58px', fontWeight: '700', color: '#ffffff', textAlign: 'center', marginBottom: '11px' }}>Технические собеседования</h1>
@@ -2230,7 +2230,7 @@ function App() {
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '64px', padding: '0 24px', background: '#11171F', borderBottom: '1px solid #6A7787', position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <button onClick={() => setIsMenuOpen(!isMenuOpen)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', padding: '4px 8px', color: '#ffffff' }}>☰</button>
-          <img src="/logo.png" alt="Логотип" style={{ height: '64px' }} />
+          <img src="/logo.png?v=2" alt="Логотип" style={{ height: '64px' }} />
           <span style={{ fontSize: '14px', fontWeight: '600', color: '#ffffff' }}>HR-platform</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
