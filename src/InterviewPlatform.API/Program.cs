@@ -37,8 +37,9 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.Configure<GrpcAuthOptions>(builder.Configuration.GetSection(GrpcAuthOptions.SectionName));
+builder.Services.AddSingleton<IAuthService, GrpcAuthService>();
 builder.Services.AddScoped<IAuditService, AuditService>();
-builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ICandidateService, CandidateService>();
 builder.Services.AddScoped<IVacancyService, VacancyService>();
 builder.Services.AddScoped<ICompetencyService, CompetencyService>();
