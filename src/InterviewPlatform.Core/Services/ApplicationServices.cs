@@ -37,12 +37,16 @@ public sealed class AuthService(
 {
     public Task<AuthResponse> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default)
     {
-        var email = NormalizeEmail(request.Email);
-        var user = unitOfWork.Users.Query().FirstOrDefault(x => x.Email.ToLower() == email && x.IsActive);
+        var login = request.Email.Trim().ToLowerInvariant();
+        var users = unitOfWork.Users.Query().Where(x => x.IsActive).ToList();
+        var user = users.FirstOrDefault(x =>
+            x.Login.ToLower() == login
+            || x.Email.ToLower() == login
+            || x.FullName.ToLower() == login);
 
         if (user is null || !passwordHasher.Verify(request.Password, user.PasswordHash))
         {
-            throw new BusinessException("Неверный email или пароль.");
+            throw new BusinessException("Неверный логин или пароль.");
         }
 
         return Task.FromResult(new AuthResponse(jwtTokenService.Generate(user), Map(user)));
@@ -50,15 +54,22 @@ public sealed class AuthService(
 
     public async Task<UserDto> CreateUserAsync(RegisterUserRequest request, Guid? performedById, CancellationToken cancellationToken = default)
     {
+        var login = request.Login.Trim().ToLowerInvariant();
         var email = NormalizeEmail(request.Email);
 
-        if (unitOfWork.Users.Query().Any(x => x.Email.ToLower() == email))
+        if (unitOfWork.Users.Query().Any(x => x.Login.ToLower() == login))
+        {
+            throw new BusinessException("Пользователь с таким логином уже существует.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(email) && unitOfWork.Users.Query().Any(x => x.Email.ToLower() == email))
         {
             throw new BusinessException("Пользователь с таким email уже существует.");
         }
 
         var user = new User
         {
+            Login = login,
             Email = email,
             FullName = request.FullName.Trim(),
             PasswordHash = passwordHasher.Hash(request.Password),
@@ -130,6 +141,7 @@ public sealed class AuthService(
 
     private static UserDto Map(User user) => new(
         user.Id,
+        user.Login,
         user.Email,
         user.FullName,
         user.Role,

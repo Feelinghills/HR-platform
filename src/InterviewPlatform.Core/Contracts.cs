@@ -4,11 +4,11 @@ namespace InterviewPlatform.Core;
 
 public sealed record LoginRequest(string Email, string Password);
 
-public sealed record RegisterUserRequest(string Email, string Password, string FullName, UserRole Role);
+public sealed record RegisterUserRequest(string Login, string Email, string Password, string FullName, UserRole Role);
 
 public sealed record AuthResponse(string Token, UserDto User);
 
-public sealed record UserDto(Guid Id, string Email, string FullName, UserRole Role, bool IsActive, DateTime CreatedAt);
+public sealed record UserDto(Guid Id, string Login, string Email, string FullName, UserRole Role, bool IsActive, DateTime CreatedAt);
 
 public sealed record UpdateUserStatusRequest(bool IsActive);
 

@@ -35,8 +35,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         {
             entity.ToTable("users");
             entity.HasKey(x => x.Id);
+            entity.HasIndex(x => x.Login).IsUnique();
             entity.HasIndex(x => x.Email).IsUnique();
-            entity.Property(x => x.Email).HasMaxLength(256).IsRequired();
+            entity.Property(x => x.Login).HasMaxLength(128).IsRequired();
+            entity.Property(x => x.Email).HasMaxLength(256);
             entity.Property(x => x.PasswordHash).HasMaxLength(512).IsRequired();
             entity.Property(x => x.FullName).HasMaxLength(256).IsRequired();
             entity.Property(x => x.Role).HasConversion<string>().HasMaxLength(32).IsRequired();
@@ -396,6 +398,7 @@ public static class DependencyInjection
             dbContext.Users.AddRange(
                 new User
                 {
+                    Login = "admin",
                     Email = "admin@example.com",
                     FullName = "Администратор",
                     Role = UserRole.Admin,
@@ -403,6 +406,7 @@ public static class DependencyInjection
                 },
                 new User
                 {
+                    Login = "hr",
                     Email = "hr@example.com",
                     FullName = "Специалист отдела кадров",
                     Role = UserRole.HR,
@@ -410,6 +414,7 @@ public static class DependencyInjection
                 },
                 new User
                 {
+                    Login = "reshala",
                     Email = "decision@example.com",
                     FullName = "Решала",
                     Role = UserRole.DecisionMaker,
