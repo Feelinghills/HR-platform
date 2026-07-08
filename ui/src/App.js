@@ -8,29 +8,13 @@ import api, {
   mapUserFromApi, mapAuditFromApi,
   statusValues, decisionValues, roleValues, roleLabels, roleLabelsRu,
 } from './api';
-
-const ROLE_API_TO_FE = { Admin: 'admin', HR: 'hr', DecisionMaker: 'reshala' };
-
-const formatDate = (isoString) => {
-  if (!isoString) return '—';
-  try { return new Date(isoString).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }); }
-  catch { return isoString; }
-};
-
-const formatDateTime = (isoString) => {
-  if (!isoString) return '—';
-  try { return new Date(isoString).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); }
-  catch { return isoString; }
-};
-
-const formatPhone = (phone) => {
-  if (!phone) return '—';
-  const p = phone.replace(/\D/g, '');
-  if (p.length <= 1) return '+' + p;
-  if (p.length <= 4) return '+' + p.slice(0,1) + ' (' + p.slice(1) + ')';
-  if (p.length <= 7) return '+' + p.slice(0,1) + ' (' + p.slice(1,4) + ') ' + p.slice(4);
-  return '+' + p.slice(0,1) + ' (' + p.slice(1,4) + ') ' + p.slice(4,7) + '-' + p.slice(7,9) + '-' + p.slice(9);
-};
+import { formatDate, formatDateTime, formatPhone } from './utils/formatters';
+import { ROLE_API_TO_FE, DEFAULT_ROLES } from './constants/roles';
+import { PERMISSION_GROUPS, PERMISSION_LABELS } from './constants/permissions';
+import { AREA_COLORS, INTERVIEW_STATUSES } from './constants/colors';
+import { getCategoryColor, getCategoryTextColor } from './utils/categoryColors';
+import { generatePDF } from './utils/pdfGenerator';
+import ArchivePage from './pages/ArchivePage';
 
 function App() {
   const navigate = useNavigate();
@@ -84,15 +68,7 @@ function App() {
   const [areaFilter, setAreaFilter] = useState('Все');
   const [actionFilter, setActionFilter] = useState('Все');
 
-  const areaColors = {
-    'Кандидаты': '#dbeafe',
-    'Собеседования': '#e9d5ff',
-    'Вакансии': '#fce7f3',
-    'Компетенции': '#d1fae5',
-    'Пользователи': '#fef3c7',
-    'Авторизация': '#fee2e2',
-    'Журнал': '#e0e7ff',
-  };
+  const areaColors = AREA_COLORS;
 
   // --- ФУНКЦИЯ ДОБАВЛЕНИЯ ЗАПИСИ В ЖУРНАЛ ---
   // Аудит ведётся на бэкенде, локальная функция оставлена как заглушка
@@ -114,61 +90,16 @@ function App() {
 
   // --- СОСТОЯНИЯ ДЛЯ РОЛЕЙ И ПРАВ ---
   const [usersTab, setUsersTab] = useState('users'); // 'users' | 'roles'
-  const defaultRoles = [
-    { id: 'admin', name: 'Администратор', color: '#dbeafe', textColor: '#1d4ed8', permissions: ['candidates.view', 'candidates.create', 'candidates.edit', 'candidates.archive', 'candidates.delete', 'vacancies.view', 'vacancies.create', 'vacancies.edit', 'vacancies.archive', 'vacancies.delete', 'interviews.view', 'interviews.create', 'interviews.edit', 'interviews.decide', 'interviews.canInterview', 'matrix.view', 'matrix.edit', 'competencies.view', 'competencies.create', 'competencies.edit', 'competencies.archive', 'competencies.delete', 'users.view', 'users.create', 'users.edit', 'users.delete', 'logs.view', 'archive.view', 'dashboard.view'] },
-    { id: 'hr', name: 'HR', color: '#d1fae5', textColor: '#065f46', permissions: ['candidates.view', 'candidates.create', 'candidates.edit', 'candidates.archive', 'vacancies.view', 'vacancies.create', 'vacancies.edit', 'vacancies.archive', 'interviews.view', 'interviews.create', 'interviews.edit', 'interviews.canInterview', 'matrix.view', 'matrix.edit', 'competencies.view', 'competencies.create', 'competencies.edit', 'competencies.archive', 'users.view', 'logs.view', 'archive.view', 'dashboard.view'] },
-    { id: 'reshala', name: 'Согласующий', color: '#fef3c7', textColor: '#92400e', permissions: ['candidates.view', 'vacancies.view', 'interviews.view', 'interviews.decide', 'matrix.view', 'competencies.view', 'archive.view', 'dashboard.view'] },
-  ];
   const [roles, setRoles] = useState(() => {
-    try { const saved = localStorage.getItem('hr_roles'); return saved ? JSON.parse(saved) : defaultRoles; } catch { return defaultRoles; }
+    try { const saved = localStorage.getItem('hr_roles'); return saved ? JSON.parse(saved) : DEFAULT_ROLES; } catch { return DEFAULT_ROLES; }
   });
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [editingRoleId, setEditingRoleId] = useState(null);
   const [roleFormData, setRoleFormData] = useState({ name: '', color: '#dbeafe', textColor: '#1d4ed8', permissions: [] });
 
-  const permissionGroups = {
-    'Кандидаты': ['candidates.view', 'candidates.create', 'candidates.edit', 'candidates.archive', 'candidates.delete'],
-    'Вакансии': ['vacancies.view', 'vacancies.create', 'vacancies.edit', 'vacancies.archive', 'vacancies.delete'],
-    'Собеседования': ['interviews.view', 'interviews.create', 'interviews.edit', 'interviews.decide', 'interviews.canInterview'],
-    'Компетенции (оценка)': ['matrix.view', 'matrix.edit'],
-    'Компетенции (справочник)': ['competencies.view', 'competencies.create', 'competencies.edit', 'competencies.archive', 'competencies.delete'],
-    'Пользователи': ['users.view', 'users.create', 'users.edit', 'users.delete'],
-    'Журнал': ['logs.view'],
-    'Архив': ['archive.view'],
-    'Главная': ['dashboard.view'],
-  };
+  const permissionGroups = PERMISSION_GROUPS;
 
-  const permissionLabels = {
-    'candidates.view': 'Просмотр кандидатов',
-    'candidates.create': 'Добавление кандидатов',
-    'candidates.edit': 'Редактирование кандидатов',
-    'candidates.archive': 'Архивация кандидатов',
-    'candidates.delete': 'Удаление кандидатов',
-    'vacancies.view': 'Просмотр вакансий',
-    'vacancies.create': 'Создание вакансий',
-    'vacancies.edit': 'Редактирование вакансий',
-    'vacancies.archive': 'Архивация вакансий',
-    'vacancies.delete': 'Удаление вакансий',
-    'interviews.view': 'Просмотр собеседований',
-    'interviews.create': 'Планирование собеседований',
-    'interviews.edit': 'Редактирование собеседований',
-    'interviews.decide': 'Принятие решений',
-    'interviews.canInterview': 'Может быть интервьюером',
-    'matrix.view': 'Просмотр оценок',
-    'matrix.edit': 'Редактирование оценок',
-    'competencies.view': 'Просмотр компетенций',
-    'competencies.create': 'Создание компетенций',
-    'competencies.edit': 'Редактирование компетенций',
-    'competencies.archive': 'Архивация компетенций',
-    'competencies.delete': 'Удаление компетенций',
-    'users.view': 'Просмотр пользователей',
-    'users.create': 'Создание пользователей',
-    'users.edit': 'Редактирование пользователей',
-    'users.delete': 'Удаление пользователей',
-    'logs.view': 'Просмотр журнала',
-    'archive.view': 'Просмотр архива',
-    'dashboard.view': 'Главная страница',
-  };
+  const permissionLabels = PERMISSION_LABELS;
 
   const hasPermission = (perm) => {
     const role = roles.find(r => r.id === userRole);
@@ -205,7 +136,7 @@ function App() {
 
   const interviewerOptions = [];
 
-  const statuses = ['Все', 'Запланировано', 'Проведено', 'Отменено', 'Архив'];
+  const statuses = INTERVIEW_STATUSES;
 
   const [newInterview, setNewInterview] = useState({
     candidateId: '',
@@ -579,29 +510,7 @@ function App() {
     return filtered;
   };
 
-  const getCategoryColor = (category) => {
-    switch(category) {
-      case 'Soft Skills': return '#dbeafe';
-      case 'Backend': return '#d1fae5';
-      case 'Database': return '#fef3c7';
-      case 'Frontend': return '#fce7f3';
-      case 'DevOps': return '#e0e7ff';
-      case 'Data': return '#e0f2fe';
-      default: return '#f1f5f9';
-    }
-  };
 
-  const getCategoryTextColor = (category) => {
-    switch(category) {
-      case 'Soft Skills': return '#1d4ed8';
-      case 'Backend': return '#065f46';
-      case 'Database': return '#92400e';
-      case 'Frontend': return '#9d174d';
-      case 'DevOps': return '#3730a3';
-      case 'Data': return '#0369a1';
-      default: return '#475569';
-    }
-  };
 
   // ================================================================
   // ОБРАБОТЧИКИ ДЛЯ КАНДИДАТОВ
@@ -896,52 +805,8 @@ function App() {
     return filtered;
   };
 
-  // --- ГЕНЕРАЦИЯ PDF ---
-  const generatePDF = (type, interview) => {
-    const candidate = candidates.find(c => c.id === interview.candidateId);
-    const currentDate = new Date().toLocaleDateString('ru-RU');
-    let content = '', title = '';
-    switch(type) {
-      case 'Карточка кандидата':
-        title = 'КАРТОЧКА КАНДИДАТА';
-        content = `ФИО: ${candidate ? candidate.name : 'Не указано'}\nТелефон: ${candidate ? formatPhone(candidate.phone) : 'Не указано'}\nГород: ${candidate ? candidate.city : 'Не указано'}\nВакансия: ${interview.vacancy}\nОпыт работы: ${candidate ? candidate.experience : 'Не указано'}\nОбразование: ${candidate ? candidate.education : 'Не указано'}\nПредыдущее место работы: ${candidate ? candidate.previousJob : 'Не указано'}\nНавыки: ${candidate && candidate.skills ? candidate.skills.join(', ') : 'Не указаны'}`;
-        break;
-      case 'Протокол собеседования':
-        title = 'ПРОТОКОЛ СОБЕСЕДОВАНИЯ';
-        content = `Кандидат: ${interview.candidateName}\nВакансия: ${interview.vacancy}\nИнтервьюер: ${interview.interviewer}\nДата: ${interview.date}\nВремя: ${interview.time}\nСтатус: ${interview.status}\nРешение: ${interview.decision || 'Ожидается'}\nКомментарии: ${interview.comments || 'Нет комментариев'}`;
-        break;
-      case 'Письмо о решении':
-        title = 'ПИСЬМО О РЕШЕНИИ';
-        const decisionText = interview.decision === 'Принят' ? 'Поздравляем! Вы приняты.' : interview.decision === 'Отказан' ? 'К сожалению, мы вынуждены отказать.' : 'Решение ещё не принято.';
-        content = `Дата: ${currentDate}\nКандидат: ${interview.candidateName}\nВакансия: ${interview.vacancy}\nРешение: ${interview.decision || 'Ожидается'}\n${decisionText}`;
-        break;
-      default: return;
-    }
-    const printWindow = window.open('', '_blank', 'width=800,height=600');
-    if (printWindow) {
-      printWindow.document.write(`
-        <html><head><title>${title}</title>
-        <style>body{font-family:Arial;padding:40px;max-width:700px;margin:0 auto;color:#1e293b} h1{text-align:center;font-size:24px;border-bottom:2px solid #1e293b;padding-bottom:12px;margin-bottom:24px;text-transform:uppercase;letter-spacing:1px} .header{text-align:center;font-size:14px;color:#64748b;margin-bottom:32px} .row{display:flex;padding:10px 0;border-bottom:1px solid #e2e8f0} .label{font-weight:600;width:180px;flex-shrink:0;color:#475569} .value{color:#0f172a} .footer{margin-top:40px;text-align:center;font-size:12px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:16px} .signature{margin-top:32px;display:flex;justify-content:space-between;font-size:14px} .signature-line{border-top:1px solid #1e293b;width:200px;padding-top:4px} .decision-box{margin-top:20px;padding:16px;background:${interview.decision === 'Принят' ? '#dcfce7' : interview.decision === 'Отказан' ? '#fee2e2' : '#fef9c3'};border-radius:8px;text-align:center;font-weight:600;font-size:18px} .company-name{text-align:center;font-size:18px;font-weight:700;color:#1e293b;margin-bottom:8px}
-        </style></head><body>
-        <div class="company-name">HR-platform</div><h1>${title}</h1><div class="header">Дата генерации: ${currentDate}</div>
-        ${content.split('\n').filter(line => line.trim()).map(line => {
-          const [label, ...valueParts] = line.split(':');
-          const value = valueParts.join(':').trim();
-          if (label && value) return `<div class="row"><span class="label">${label.trim()}:</span><span class="value">${value}</span></div>`;
-          return '';
-        }).join('')}
-        ${type === 'Письмо о решении' ? `<div class="decision-box">${interview.decision === 'Принят' ? 'ПРИНЯТ' : interview.decision === 'Отказан' ? 'ОТКАЗАН' : 'ОЖИДАЕТ РЕШЕНИЯ'}</div>` : ''}
-        <div class="signature"><div><span>Подпись: </span><span class="signature-line">&nbsp;</span></div><div><span>Дата: </span><span class="signature-line">&nbsp;</span></div></div>
-        <div class="footer">Документ сгенерирован в системе HR-platform</div>
-        </body></html>
-      `);
-      printWindow.document.close();
-      printWindow.focus();
-      setTimeout(() => printWindow.print(), 500);
-    } else {
-      alert('Пожалуйста, разрешите всплывающие окна для этого сайта');
-    }
-  };
+
+  const pdfGenerate = (type, interview) => generatePDF(type, interview, candidates);
 
   // --- ЗАГРУЗКА ДАННЫХ С БЭКЕНДА ---
   const loadData = useCallback(async () => {
@@ -1409,9 +1274,9 @@ function App() {
                 {/* Разделитель перед скачиванием */}
                 <div style={{ borderTop: '1px solid #2A3344', margin: '4px 0' }} />
                 {/* Скачивание PDF */}
-                <button onClick={() => generatePDF('Карточка кандидата', selectedInterview)} style={{ padding: '10px 16px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s', fontFamily: "'Unbounded', sans-serif", textAlign: 'left' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Скачать карточку кандидата</button>
-                <button onClick={() => generatePDF('Протокол собеседования', selectedInterview)} style={{ padding: '10px 16px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s', fontFamily: "'Unbounded', sans-serif", textAlign: 'left' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Скачать протокол собеседования</button>
-                <button onClick={() => generatePDF('Письмо о решении', selectedInterview)} style={{ padding: '10px 16px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s', fontFamily: "'Unbounded', sans-serif", textAlign: 'left' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Скачать письмо о решении</button>
+                <button onClick={() => pdfGenerate('Карточка кандидата', selectedInterview)} style={{ padding: '10px 16px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s', fontFamily: "'Unbounded', sans-serif", textAlign: 'left' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Скачать карточку кандидата</button>
+                <button onClick={() => pdfGenerate('Протокол собеседования', selectedInterview)} style={{ padding: '10px 16px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s', fontFamily: "'Unbounded', sans-serif", textAlign: 'left' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Скачать протокол собеседования</button>
+                <button onClick={() => pdfGenerate('Письмо о решении', selectedInterview)} style={{ padding: '10px 16px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s', fontFamily: "'Unbounded', sans-serif", textAlign: 'left' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Скачать письмо о решении</button>
               </div>
             </div>
           </div>
@@ -2353,7 +2218,7 @@ function App() {
     if (currentPage === 'matrix') return renderMatrixPage();
     if (currentPage === 'vacancies') return renderVacanciesPage();
     if (currentPage === 'logs') return renderLogsPage();
-    if (currentPage === 'archive') return renderArchivePage();
+    if (currentPage === 'archive') return <ArchivePage candidates={candidates} interviews={interviews} competencies={competencies} handleArchiveCandidate={handleArchiveCandidate} handleUnarchiveInterview={handleUnarchiveInterview} handleArchiveCompetency={handleArchiveCompetency} />;
     return renderDashboardPage();
   };
 

@@ -1,0 +1,7 @@
+export const ROLE_API_TO_FE = { Admin: 'admin', HR: 'hr', DecisionMaker: 'reshala' };
+
+export const DEFAULT_ROLES = [
+  { id: 'admin', name: 'Администратор', color: '#dbeafe', textColor: '#1d4ed8', permissions: ['candidates.view', 'candidates.create', 'candidates.edit', 'candidates.archive', 'candidates.delete', 'vacancies.view', 'vacancies.create', 'vacancies.edit', 'vacancies.archive', 'vacancies.delete', 'interviews.view', 'interviews.create', 'interviews.edit', 'interviews.decide', 'interviews.canInterview', 'matrix.view', 'matrix.edit', 'competencies.view', 'competencies.create', 'competencies.edit', 'competencies.archive', 'competencies.delete', 'users.view', 'users.create', 'users.edit', 'users.delete', 'logs.view', 'archive.view', 'dashboard.view'] },
+  { id: 'hr', name: 'HR', color: '#d1fae5', textColor: '#065f46', permissions: ['candidates.view', 'candidates.create', 'candidates.edit', 'candidates.archive', 'vacancies.view', 'vacancies.create', 'vacancies.edit', 'vacancies.archive', 'interviews.view', 'interviews.create', 'interviews.edit', 'interviews.canInterview', 'matrix.view', 'matrix.edit', 'competencies.view', 'competencies.create', 'competencies.edit', 'competencies.archive', 'users.view', 'logs.view', 'archive.view', 'dashboard.view'] },
+  { id: 'reshala', name: 'Согласующий', color: '#fef3c7', textColor: '#92400e', permissions: ['candidates.view', 'vacancies.view', 'interviews.view', 'interviews.decide', 'matrix.view', 'competencies.view', 'archive.view', 'dashboard.view'] },
+];
