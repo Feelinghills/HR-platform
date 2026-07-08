@@ -160,6 +160,28 @@ func main() {
 		}
 		userID := parts[0]
 
+		if r.Method == http.MethodPut && len(parts) == 1 {
+			var req struct {
+				Login    string `json:"login"`
+				Email    string `json:"email"`
+				FullName string `json:"fullName"`
+				Role     string `json:"role"`
+				Password string `json:"password"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, "invalid request body", http.StatusBadRequest)
+				return
+			}
+			user, err := authSvc.UpdateUser(r.Context(), userID, req.Login, req.Email, req.FullName, req.Role, req.Password)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(user)
+			return
+		}
+
 		if len(parts) == 2 && parts[1] == "status" && r.Method == http.MethodPatch {
 			var req struct {
 				IsActive    bool   `json:"isActive"`

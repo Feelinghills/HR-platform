@@ -130,6 +130,8 @@ const api = {
   getUsers: () => apiFetch('/users', {}, AUTH_API),
   createUser: (data) =>
     apiFetch('/users', { method: 'POST', body: JSON.stringify(data) }, AUTH_API),
+  updateUser: (id, data) =>
+    apiFetch(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }, AUTH_API),
   setUserStatus: (id, isActive) =>
     apiFetch(`/users/${id}/status`, { method: 'PATCH', body: JSON.stringify({ isActive }) }, AUTH_API),
   deleteUser: (id, reason) =>

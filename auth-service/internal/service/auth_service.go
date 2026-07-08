@@ -201,6 +201,51 @@ func (s *AuthService) Register(ctx context.Context, login, email, password, full
 	return user, nil
 }
 
+func (s *AuthService) UpdateUser(ctx context.Context, id, login, email, fullName, role string, password string) (*model.User, error) {
+	user, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("пользователь не найден")
+	}
+
+	login = strings.TrimSpace(strings.ToLower(login))
+	email = strings.TrimSpace(strings.ToLower(email))
+
+	if login != strings.ToLower(user.Login) {
+		exists, _ := s.repo.LoginExists(ctx, login)
+		if exists {
+			return nil, fmt.Errorf("пользователь с таким логином уже существует")
+		}
+	}
+
+	if email != strings.ToLower(user.Email) {
+		exists, _ := s.repo.EmailExists(ctx, email)
+		if exists {
+			return nil, fmt.Errorf("пользователь с таким email уже существует")
+		}
+	}
+
+	user.Login = login
+	user.Email = email
+	user.FullName = strings.TrimSpace(fullName)
+	user.Role = role
+
+	if err := s.repo.Update(ctx, user); err != nil {
+		return nil, fmt.Errorf("update user: %w", err)
+	}
+
+	if password != "" {
+		if err := s.repo.UpdatePassword(ctx, id, hashPasswordPBKDF2(password)); err != nil {
+			return nil, fmt.Errorf("update password: %w", err)
+		}
+	}
+
+	s.cache.Invalidate(strings.ToLower(user.Login))
+	s.cache.Invalidate(strings.ToLower(user.Email))
+	s.cache.Invalidate(id)
+
+	return user, nil
+}
+
 func (s *AuthService) ListUsers(ctx context.Context) ([]*model.User, error) {
 	return s.repo.ListAll(ctx)
 }

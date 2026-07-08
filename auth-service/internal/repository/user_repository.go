@@ -80,6 +80,14 @@ func (r *UserRepository) UpdatePassword(ctx context.Context, userID, passwordHas
 	return err
 }
 
+func (r *UserRepository) Update(ctx context.Context, user *model.User) error {
+	_, err := r.db.Exec(ctx,
+		`UPDATE users SET "Login" = $1, "Email" = $2, "FullName" = $3, "Role" = $4 WHERE "Id" = $5`,
+		user.Login, user.Email, user.FullName, user.Role, user.ID,
+	)
+	return err
+}
+
 func (r *UserRepository) ListAll(ctx context.Context) ([]*model.User, error) {
 	rows, err := r.db.Query(ctx,
 		`SELECT "Id", "Login", "Email", "FullName", "PasswordHash", "Role", "IsActive", "IsDeleted", "CreatedAt"
@@ -110,10 +118,18 @@ func (r *UserRepository) SetStatus(ctx context.Context, id string, isActive bool
 }
 
 func (r *UserRepository) SoftDelete(ctx context.Context, id, deletedById, reason string) error {
-	_, err := r.db.Exec(ctx,
-		`UPDATE users SET "IsDeleted" = true, "DeletedAt" = $1, "DeletedById" = $2::uuid, "DeletedReason" = $3 WHERE "Id" = $4`,
-		time.Now(), deletedById, reason, id,
-	)
+	var err error
+	if deletedById == "" {
+		_, err = r.db.Exec(ctx,
+			`UPDATE users SET "IsDeleted" = true, "DeletedAt" = $1, "DeletedReason" = $2 WHERE "Id" = $3`,
+			time.Now(), reason, id,
+		)
+	} else {
+		_, err = r.db.Exec(ctx,
+			`UPDATE users SET "IsDeleted" = true, "DeletedAt" = $1, "DeletedById" = $2::uuid, "DeletedReason" = $3 WHERE "Id" = $4`,
+			time.Now(), deletedById, reason, id,
+		)
+	}
 	return err
 }
 
