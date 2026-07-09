@@ -1849,9 +1849,9 @@ function App() {
             <span style={{ fontSize: '16px', color: '#6A7787' }}>Всего: {vacanciesList.length}</span>
           </div>
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            <button onClick={openAddVacancyModal} style={{ padding: '8px 20px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>
+            {hasPermission('vacancies.create') && <button onClick={openAddVacancyModal} style={{ padding: '8px 20px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>
               Добавить вакансию
-            </button>
+            </button>}
             <button onClick={() => setShowArchivedVacancies(!showArchivedVacancies)} style={{ padding: '8px 20px', background: showArchivedVacancies ? '#3E503A' : '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = showArchivedVacancies ? '#4A6A4A' : '#4A5A70'} onMouseLeave={(e) => e.target.style.background = showArchivedVacancies ? '#3E503A' : '#333F50'}>
               {showArchivedVacancies ? 'Скрыть архив' : 'Показать архив'}
             </button>
@@ -1981,14 +1981,14 @@ function App() {
                       <span style={{ color: '#ffffff', fontWeight: '500' }}>{c.name}</span>
                       <span style={{ color: '#6A7787', fontSize: '12px', marginLeft: '12px' }}>{c.vacancy}</span>
                     </div>
-                    <button
+                    {hasPermission('candidates.archive') && <button
                       onClick={() => handleArchiveCandidate(c.id)}
                       style={{ padding: '4px 12px', background: '#3E503A', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }}
                       onMouseEnter={(e) => e.target.style.background = '#4A6A4A'}
                       onMouseLeave={(e) => e.target.style.background = '#3E503A'}
                     >
                       Разархивировать
-                    </button>
+                    </button>}
                   </div>
                 ))}
               </div>
@@ -2011,14 +2011,14 @@ function App() {
                       <span style={{ color: '#6A7787', fontSize: '12px', marginLeft: '12px' }}>{formatDate(i.date)}</span>
                       <span style={{ color: '#6A7787', fontSize: '12px', marginLeft: '12px' }}>{i.status}</span>
                     </div>
-                    <button
+                    {hasPermission('interviews.archive') && <button
                       onClick={() => handleUnarchiveInterview(i.id)}
                       style={{ padding: '4px 12px', background: '#3E503A', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }}
                       onMouseEnter={(e) => e.target.style.background = '#4A6A4A'}
                       onMouseLeave={(e) => e.target.style.background = '#3E503A'}
                     >
                       Разархивировать
-                    </button>
+                    </button>}
                   </div>
                 ))}
               </div>
@@ -2041,14 +2041,14 @@ function App() {
                       <span style={{ color: '#6A7787', fontSize: '12px', marginLeft: '12px' }}>{c.category}</span>
                       <span style={{ color: '#6A7787', fontSize: '12px', marginLeft: '12px' }}>до {c.maxScore} баллов</span>
                     </div>
-                    <button
+                    {hasPermission('competencies.archive') && <button
                       onClick={() => handleArchiveCompetency(c.id)}
                       style={{ padding: '4px 12px', background: '#3E503A', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }}
                       onMouseEnter={(e) => e.target.style.background = '#4A6A4A'}
                       onMouseLeave={(e) => e.target.style.background = '#3E503A'}
                     >
                       Разархивировать
-                    </button>
+                    </button>}
                   </div>
                 ))}
               </div>
