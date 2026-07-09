@@ -694,7 +694,13 @@ function App() {
     try {
       let updated;
       if (decision === 'Ожидает') {
-        updated = await api.updateInterviewStatus(interviewId, { status: 'Completed', comments: '' });
+        const interview = interviews.find(i => i.id === interviewId);
+        const matrix = interview?.matrix || [];
+        if (matrix.length > 0 && matrix.some(m => !m.score || m.score === 0)) {
+          alert('Не все оценки компетенций проставлены. Завершить собеседование можно только после заполнения всех оценок.');
+          return;
+        }
+        updated = await api.updateInterviewStatus(interviewId, { status: 'Completed', comments: interviewComments });
       } else if (decision === 'Без решения') {
         updated = await api.updateInterviewStatus(interviewId, { status: 'Cancelled', comments: '', decision: 'Pending' });
       } else {
@@ -1220,7 +1226,7 @@ function App() {
       ? matrix.map(m => m.competencyName)
       : ['Навык 1', 'Навык 2', 'Навык 3'];
     const isConcluded = selectedInterview.status === 'Проведено' || selectedInterview.status === 'Отменено';
-    const canEditMatrix = selectedInterview.status === 'Запланировано';
+    const canEditMatrix = selectedInterview.status === 'Запланировано' && hasPermission('matrix.edit');
     const renderStars = (skillIndex) => {
       const rating = matrix[skillIndex]?.score || 0;
       const stars = [];
