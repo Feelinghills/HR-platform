@@ -150,6 +150,7 @@ function App() {
     time: ''
   });
   const [statusFilter, setStatusFilter] = useState('Все');
+  const [decisionFilter, setDecisionFilter] = useState('Все');
   const [dateFilterFrom, setDateFilterFrom] = useState('');
   const [dateFilterTo, setDateFilterTo] = useState('');
   const [searchQueryInterviews, setSearchQueryInterviews] = useState('');
@@ -944,6 +945,12 @@ function App() {
     } else if (!showArchivedInterviews) {
       filtered = filtered.filter(i => !i.isArchived);
     }
+
+    // Фильтр по решению
+    const decisionArr = Array.isArray(decisionFilter) ? decisionFilter : (decisionFilter && decisionFilter !== 'Все' ? [decisionFilter] : []);
+    if (decisionArr.length > 0) {
+      filtered = filtered.filter(i => decisionArr.includes(i.decision));
+    }
     
     // Фильтр по дате (от)
     if (dateFilterFrom) {
@@ -1117,6 +1124,7 @@ function App() {
     setSearchQueryInterviews('');
     setInterviewSortOption('newest');
     setStatusFilter('Все');
+    setDecisionFilter('Все');
     setDateFilterFrom('');
     setDateFilterTo('');
     setLogsSortOption('newest');
@@ -1138,8 +1146,16 @@ function App() {
 
   // --- ПРИМЕНЕНИЕ ПОИСКА ИЗ НАВИГАЦИИ ---
   useEffect(() => {
-    if (location.state && location.state.searchQuery) {
-      setSearchQueryInterviews(location.state.searchQuery);
+    if (location.state) {
+      if (location.state.searchQuery) {
+        setSearchQueryInterviews(location.state.searchQuery);
+      }
+      if (location.state.decisionFilter) {
+        setDecisionFilter(location.state.decisionFilter);
+      }
+      if (location.state.statusFilter) {
+        setStatusFilter(location.state.statusFilter);
+      }
       window.history.replaceState({}, '');
     }
   }, [location.state]);
@@ -1626,6 +1642,7 @@ function App() {
           filters={[
             { key: 'date', type: 'date', label: 'Дата собеседования' },
             { key: 'status', type: 'select', label: 'Статус', options: statuses.slice(1) },
+            { key: 'decision', type: 'select', label: 'Решение', options: ['Ожидает', 'Принят', 'Отказан', 'Следующий этап', 'Кадровый резерв', 'Без решения'] },
             { key: 'sort', type: 'sort', label: 'Сортировка', options: [
               { value: 'newest', label: 'Сначала новые' },
               { value: 'oldest', label: 'Сначала старые' },
@@ -1635,15 +1652,17 @@ function App() {
           activeFilters={{
             dateFrom: dateFilterFrom, dateTo: dateFilterTo,
             status: Array.isArray(statusFilter) ? statusFilter : (statusFilter && statusFilter !== 'Все' ? [statusFilter] : []),
+            decision: Array.isArray(decisionFilter) ? decisionFilter : (decisionFilter && decisionFilter !== 'Все' ? [decisionFilter] : []),
             sort: [interviewSortOption],
           }}
           setFilter={(key, val) => {
             if (key === 'dateFrom') setDateFilterFrom(val);
             else if (key === 'dateTo') setDateFilterTo(val);
             else if (key === 'status') setStatusFilter(val);
+            else if (key === 'decision') setDecisionFilter(val);
             else if (key === 'sort') setInterviewSortOption(val.length > 0 ? val[0] : 'newest');
           }}
-          clearAllFilters={() => { setDateFilterFrom(''); setDateFilterTo(''); setStatusFilter([]); setSearchQueryInterviews(''); setInterviewSortOption('newest'); }}
+          clearAllFilters={() => { setDateFilterFrom(''); setDateFilterTo(''); setStatusFilter([]); setDecisionFilter([]); setSearchQueryInterviews(''); setInterviewSortOption('newest'); }}
           totalCount={interviews.length}
           filteredCount={filteredInterviews.length}
         />
@@ -2509,9 +2528,6 @@ function App() {
       <div style={{ padding: '24px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
           <h1 style={{ fontSize: '28px', fontWeight: '700', color: '#ffffff' }}>Главная</h1>
-          <div style={{ background: '#171D24', padding: '12px 24px', borderRadius: '12px' }}>
-            <span style={{ fontSize: '16px', color: '#ffffff' }}>Сегодня назначено собеседований: <strong style={{ fontSize: '20px' }}>{getTodayInterviewsCount()}</strong></span>
-          </div>
         </div>
 
         <div style={{ background: '#171D24', padding: '20px 24px', borderRadius: '12px', marginBottom: '32px', display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
@@ -2521,6 +2537,9 @@ function App() {
             if (label === 'Создать вакансию') return <button key={idx} onClick={() => openAddVacancyModal()} style={{ padding: '8px 18px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', fontSize: '13px', color: '#ffffff', cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#11171F'}>{label}</button>;
             if (label === 'Просмотр действий') return <button key={idx} onClick={() => navigate('logs')} style={{ padding: '8px 18px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', fontSize: '13px', color: '#ffffff', cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#11171F'}>{label}</button>;
             if (label === 'Пользователи') return <button key={idx} onClick={() => navigate('users')} style={{ padding: '8px 18px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', fontSize: '13px', color: '#ffffff', cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#11171F'}>{label}</button>;
+            if (label === 'Список кандидатов') return <button key={idx} onClick={() => navigate('candidates')} style={{ padding: '8px 18px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', fontSize: '13px', color: '#ffffff', cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#11171F'}>{label}</button>;
+            if (label === 'Список собеседований') return <button key={idx} onClick={() => navigate('interviews')} style={{ padding: '8px 18px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', fontSize: '13px', color: '#ffffff', cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#11171F'}>{label}</button>;
+            if (label === 'Ожидают решения') return <button key={idx} onClick={() => { navigate('interviews', { state: { decisionFilter: ['Ожидает'], statusFilter: ['Проведено'] } }); }} style={{ padding: '8px 18px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', fontSize: '13px', color: '#ffffff', cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#11171F'}>{label}</button>;
             return <button key={idx} style={{ padding: '8px 18px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', fontSize: '13px', color: '#ffffff', cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#11171F'}>{label}</button>;
           })}
         </div>
@@ -2624,8 +2643,10 @@ function App() {
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '64px', padding: '0 24px', background: '#11171F', borderBottom: '1px solid #6A7787', position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <button onClick={() => setIsMenuOpen(!isMenuOpen)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', padding: '4px 8px', color: '#ffffff' }}>☰</button>
-          <img src="/logo.png?v=2" alt="Логотип" style={{ height: '64px' }} />
-          <span style={{ fontSize: '14px', fontWeight: '600', color: '#ffffff' }}>HR-platform</span>
+          <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }} onClick={() => navigate('dashboard')}>
+            <img src="/logo.png?v=2" alt="Логотип" style={{ height: '64px' }} />
+            <span style={{ fontSize: '14px', fontWeight: '600', color: '#ffffff' }}>HR-platform</span>
+          </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <button onClick={() => setIsProfileOpen(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '40px', height: '40px', borderRadius: '50%', background: '#333F50', border: 'none', cursor: 'pointer', color: '#ffffff', fontSize: '18px', fontWeight: '700', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>{userName.charAt(0).toUpperCase()}</button>
