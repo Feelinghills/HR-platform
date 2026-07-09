@@ -15,6 +15,8 @@ import { AREA_COLORS, INTERVIEW_STATUSES } from './constants/colors';
 import { getCategoryColor, getCategoryTextColor } from './utils/categoryColors';
 import { generatePDF } from './utils/pdfGenerator';
 import ArchivePage from './pages/ArchivePage';
+import DeletedPage from './pages/DeletedPage';
+import SearchFilter from './components/SearchFilter';
 
 function App() {
   const navigate = useNavigate();
@@ -61,12 +63,14 @@ function App() {
   const [searchQueryVacancies, setSearchQueryVacancies] = useState('');
   const [showArchivedVacancies, setShowArchivedVacancies] = useState(false);
   const [expandedVacancyId, setExpandedVacancyId] = useState(null);
+  const [vacancySortOption, setVacancySortOption] = useState('newest');
 
   // --- СОСТОЯНИЯ ДЛЯ ЖУРНАЛА ИЗМЕНЕНИЙ ---
   const [logs, setLogs] = useState([]);
   const [searchQueryLogs, setSearchQueryLogs] = useState('');
   const [areaFilter, setAreaFilter] = useState('Все');
   const [actionFilter, setActionFilter] = useState('Все');
+  const [logsSortOption, setLogsSortOption] = useState('newest');
 
   const areaColors = AREA_COLORS;
 
@@ -125,6 +129,7 @@ function App() {
   const [searchQueryCompetencies, setSearchQueryCompetencies] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('Все');
   const [showArchivedCompetencies, setShowArchivedCompetencies] = useState(false);
+  const [competencySortOption, setCompetencySortOption] = useState('newest');
 
   // --- ДАННЫЕ ---
   const [candidates, setCandidates] = useState([]);
@@ -148,6 +153,7 @@ function App() {
   const [dateFilterFrom, setDateFilterFrom] = useState('');
   const [dateFilterTo, setDateFilterTo] = useState('');
   const [searchQueryInterviews, setSearchQueryInterviews] = useState('');
+  const [interviewSortOption, setInterviewSortOption] = useState('newest');
 
   // --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
   const getTodayInterviews = () => {
@@ -174,6 +180,8 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOption, setSortOption] = useState('newest');
   const [showSortMenu, setShowSortMenu] = useState(false);
+  const [candidateStatusFilter, setCandidateStatusFilter] = useState([]);
+  const [experienceFilter, setExperienceFilter] = useState([]);
 
   // --- ВАЛИДАЦИЯ ТЕЛЕФОНА ---
   const validatePhone = (phone) => {
@@ -273,6 +281,11 @@ function App() {
     if (!showArchivedVacancies) {
       filtered = filtered.filter(v => !v.isArchived);
     }
+    switch (vacancySortOption) {
+      case 'oldest': filtered.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)); break;
+      case 'alphabet': filtered.sort((a, b) => a.title.localeCompare(b.title)); break;
+      default: filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); break;
+    }
     return filtered;
   };
 
@@ -305,23 +318,30 @@ function App() {
         l.objectId.toLowerCase().includes(searchQueryLogs.toLowerCase())
       );
     }
-    if (areaFilter !== 'Все') {
-      filtered = filtered.filter(l => l.area === areaFilter);
+    const areaArr = Array.isArray(areaFilter) ? areaFilter : (areaFilter && areaFilter !== 'Все' ? [areaFilter] : []);
+    if (areaArr.length > 0) {
+      filtered = filtered.filter(l => areaArr.includes(l.area));
     }
-    if (actionFilter !== 'Все') {
-      filtered = filtered.filter(l => l.action === actionFilter);
+    const actionArr = Array.isArray(actionFilter) ? actionFilter : (actionFilter && actionFilter !== 'Все' ? [actionFilter] : []);
+    if (actionArr.length > 0) {
+      filtered = filtered.filter(l => actionArr.includes(l.action));
+    }
+    // Сортировка
+    switch (logsSortOption) {
+      case 'oldest': filtered.sort((a, b) => (a.date || '').localeCompare(b.date || '')); break;
+      default: filtered.sort((a, b) => (b.date || '').localeCompare(a.date || '')); break;
     }
     return filtered;
   };
 
   const getUniqueAreas = () => {
     const areas = logs.map(l => l.area);
-    return ['Все', ...new Set(areas)];
+    return [...new Set(areas)];
   };
 
   const getUniqueActions = () => {
     const actions = logs.map(l => l.action);
-    return ['Все', ...new Set(actions)];
+    return [...new Set(actions)];
   };
 
   // ================================================================
@@ -501,11 +521,17 @@ function App() {
         c.description.toLowerCase().includes(searchQueryCompetencies.toLowerCase())
       );
     }
-    if (categoryFilter !== 'Все') {
-      filtered = filtered.filter(c => c.category === categoryFilter);
+    const catArr = Array.isArray(categoryFilter) ? categoryFilter : (categoryFilter && categoryFilter !== 'Все' ? [categoryFilter] : []);
+    if (catArr.length > 0) {
+      filtered = filtered.filter(c => catArr.includes(c.category));
     }
     if (!showArchivedCompetencies) {
       filtered = filtered.filter(c => c.isActive);
+    }
+    switch (competencySortOption) {
+      case 'oldest': filtered.sort((a, b) => a.name.localeCompare(b.name)); break;
+      case 'category': filtered.sort((a, b) => (a.category || '').localeCompare(b.category || '')); break;
+      default: filtered.sort((a, b) => a.name.localeCompare(b.name)); break;
     }
     return filtered;
   };
@@ -551,11 +577,40 @@ function App() {
     }
   };
 
+  const handleDeleteCandidate = async (candidateId) => {
+    if (!window.confirm('Удалить кандидата? Действие можно будет отменить в разделе "Удалённое".')) return;
+    try {
+      await api.deleteCandidate(candidateId);
+      setCandidates(candidates.filter(c => c.id !== candidateId));
+      if (selectedCandidate && selectedCandidate.id === candidateId) {
+        setSelectedCandidate(null); setIsEditing(false); setEditData({});
+      }
+    } catch (err) {
+      alert('Ошибка: ' + err.message);
+    }
+  };
+
+  const handleDeleteInterview = async (interviewId) => {
+    if (!window.confirm('Удалить собеседование? Действие можно будет отменить в разделе "Удалённое".')) return;
+    try {
+      await api.deleteInterview(interviewId);
+      setInterviews(interviews.filter(i => i.id !== interviewId));
+      if (selectedInterview && selectedInterview.id === interviewId) {
+        setSelectedInterview(null); setShowInterviewCard(false);
+      }
+    } catch (err) {
+      alert('Ошибка: ' + err.message);
+    }
+  };
+
   const handleEditChange = (field, value) => {
     setEditData(prev => ({ ...prev, [field]: value }));
   };
 
   const handleSaveEdit = async () => {
+    if (!editData.phone || editData.phone.length < 10) { alert('Введите корректный номер телефона'); return; }
+    if (!editData.city || !editData.city.trim()) { alert('Введите город'); return; }
+    if (!editData.education || !editData.education.trim()) { alert('Введите образование'); return; }
     const updatedData = { ...selectedCandidate, ...editData };
     try {
       const dto = mapCandidateToApi(updatedData);
@@ -593,21 +648,31 @@ function App() {
     let filtered = candidates.filter(c => {
       const matchesSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         c.phone.includes(searchQuery) ||
-        c.vacancy.toLowerCase().includes(searchQuery.toLowerCase());
+        c.vacancy.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (c.city && c.city.toLowerCase().includes(searchQuery.toLowerCase()));
       const archiveMatch = showArchivedCandidates ? true : !c.isArchived;
       return matchesSearch && archiveMatch;
     });
+    // Фильтр по статусу
+    const statusArr = Array.isArray(candidateStatusFilter) ? candidateStatusFilter : [];
+    if (statusArr.length > 0) {
+      filtered = filtered.filter(c => statusArr.includes(getCandidateStatus(c.id)));
+    }
+    // Фильтр по опыту
+    const expArr = Array.isArray(experienceFilter) ? experienceFilter : [];
+    if (expArr.length > 0) {
+      filtered = filtered.filter(c => c.experience && expArr.includes(c.experience));
+    }
     switch (sortOption) {
-      case 'newest':
-        filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-        break;
       case 'oldest':
-        filtered.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+        filtered.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
         break;
       case 'alphabet':
-        filtered.sort((a, b) => a.name.localeCompare(b.name));
+        filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
         break;
-      default: break;
+      default:
+        filtered.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+        break;
     }
     return filtered;
   };
@@ -685,15 +750,41 @@ function App() {
     try {
       let updated;
       if (decision === 'Ожидает') {
-        updated = await api.updateInterviewStatus(interviewId, { status: 'Completed', comments: '' });
+        updated = await api.updateInterviewStatus(interviewId, { status: 'Completed', comments: interviewComments || selectedInterview?.comments || '' });
       } else if (decision === 'Без решения') {
-        updated = await api.updateInterviewStatus(interviewId, { status: 'Cancelled', comments: '', decision: 'Pending' });
+        updated = await api.updateInterviewStatus(interviewId, { status: 'Cancelled', comments: interviewComments || selectedInterview?.comments || '', decision: 'Pending' });
       } else {
         const apiDecision = decisionValues[decision] || decision;
         updated = await api.decideInterview(interviewId, { decision: apiDecision });
       }
       const mapped = mapInterviewFromApi(updated);
-      setInterviews(interviews.map(i => i.id === interviewId ? mapped : i));
+      let newInterviews = interviews.map(i => i.id === interviewId ? mapped : i);
+
+      // Архивация других собеседований при "Принят" или "Кадровый резерв"
+      if (decision === 'Принят' || decision === 'Кадровый резерв') {
+        const otherInterviews = newInterviews.filter(i => i.candidateId === mapped.candidateId && i.id !== interviewId && !i.isArchived);
+        for (const other of otherInterviews) {
+          try { await api.archiveInterview(other.id); } catch {}
+        }
+        newInterviews = newInterviews.map(i => i.candidateId === mapped.candidateId && i.id !== interviewId ? { ...i, isArchived: true } : i);
+      }
+
+      // Если все собеседования отклонены — архивируем все
+      if (decision === 'Отказан' || decision === 'Без решения') {
+        const candidateInterviews = newInterviews.filter(i => i.candidateId === mapped.candidateId);
+        const allConcluded = candidateInterviews.every(i => i.status === 'Проведено' || i.status === 'Отменено');
+        const allRejected = allConcluded && candidateInterviews.every(i => i.decision === 'Отказан' || i.decision === 'Без решения' || i.status === 'Отменено');
+        if (allRejected && candidateInterviews.length > 0) {
+          for (const ci of candidateInterviews) {
+            if (!ci.isArchived) {
+              try { await api.archiveInterview(ci.id); } catch {}
+            }
+          }
+          newInterviews = newInterviews.map(i => i.candidateId === mapped.candidateId ? { ...i, isArchived: true } : i);
+        }
+      }
+
+      setInterviews(newInterviews);
       if (selectedInterview && selectedInterview.id === interviewId) {
         setSelectedInterview(mapped);
       }
@@ -726,6 +817,7 @@ function App() {
 
   const openInterviewCard = (interview) => {
     setSelectedInterview(interview);
+    setInterviewComments(interview.comments || '');
     setShowInterviewCard(true);
     const candidate = candidates.find(c => c.id === interview.candidateId);
     if (candidate) {
@@ -775,11 +867,13 @@ function App() {
   const getFilteredInterviews = () => {
     let filtered = interviews;
     
-    // Фильтр по статусу
-    if (statusFilter !== 'Все' && statusFilter !== 'Архив') {
-      filtered = filtered.filter(i => i.status === statusFilter);
+    // Фильтр по статусу (массив)
+    const statusArr = Array.isArray(statusFilter) ? statusFilter : (statusFilter && statusFilter !== 'Все' ? [statusFilter] : []);
+    const hasArchiveStatus = statusArr.includes('Архив');
+    if (statusArr.length > 0 && !hasArchiveStatus) {
+      filtered = filtered.filter(i => statusArr.includes(i.status));
     }
-    if (statusFilter === 'Архив') {
+    if (hasArchiveStatus) {
       filtered = filtered.filter(i => i.isArchived);
     } else if (!showArchivedInterviews) {
       filtered = filtered.filter(i => !i.isArchived);
@@ -799,8 +893,15 @@ function App() {
     if (searchQueryInterviews) {
       filtered = filtered.filter(i =>
         i.candidateName.toLowerCase().includes(searchQueryInterviews.toLowerCase()) ||
-        i.vacancy.toLowerCase().includes(searchQueryInterviews.toLowerCase())
+        i.vacancy.toLowerCase().includes(searchQueryInterviews.toLowerCase()) ||
+        (i.interviewer && i.interviewer.toLowerCase().includes(searchQueryInterviews.toLowerCase()))
       );
+    }
+    // Сортировка
+    switch (interviewSortOption) {
+      case 'oldest': filtered.sort((a, b) => new Date(a.date) - new Date(b.date)); break;
+      case 'alphabet': filtered.sort((a, b) => (a.candidateName || '').localeCompare(b.candidateName || '')); break;
+      default: filtered.sort((a, b) => new Date(b.date) - new Date(a.date)); break;
     }
     return filtered;
   };
@@ -910,9 +1011,13 @@ function App() {
     setSortOption('newest');
     setShowSortMenu(false);
     setSearchQueryInterviews('');
+    setInterviewSortOption('newest');
     setStatusFilter('Все');
     setDateFilterFrom('');
     setDateFilterTo('');
+    setLogsSortOption('newest');
+    setCompetencySortOption('newest');
+    setVacancySortOption('newest');
     setShowInterviewCard(false);
     setSelectedInterview(null);
     setSelectedCandidate(null);
@@ -925,6 +1030,14 @@ function App() {
     setShowRoleModal(false);
     if (step === 'main') loadData();
   }, [currentPage]);
+
+  // --- ПРИМЕНЕНИЕ ПОИСКА ИЗ НАВИГАЦИИ ---
+  useEffect(() => {
+    if (location.state && location.state.searchQuery) {
+      setSearchQueryInterviews(location.state.searchQuery);
+      window.history.replaceState({}, '');
+    }
+  }, [location.state]);
 
   // --- СОХРАНЕНИЕ РОЛЕЙ В localStorage ---
   useEffect(() => {
@@ -1026,21 +1139,33 @@ function App() {
   // --- КАРТОЧКА КАНДИДАТА ---
   const renderCandidateCard = () => {
     if (!selectedCandidate) return null;
-    const skills = selectedCandidate.skills || ['Навык 1', 'Навык 2', 'Навык 3'];
-    const renderStars = (skillIndex) => {
-      const rating = ratings[skillIndex] || 0;
-      const stars = [];
-      for (let i = 0; i < 5; i++) {
-        const isFilled = i < rating;
-        stars.push(<span key={i} style={{ fontSize: '24px', cursor: isEditing ? 'pointer' : 'default', userSelect: 'none', color: isFilled ? '#7F7B6D' : '#3A3F4A', textShadow: isFilled ? 'none' : '0 0 0 1px #7F7B6D', transition: 'color 0.2s, transform 0.2s', display: 'inline-block', opacity: isEditing ? 1 : 0.5, margin: '0 2px' }} onClick={() => isEditing && handleStarClick(skillIndex, i)} onMouseEnter={(e) => { if (isEditing && i >= rating) e.target.style.transform = 'scale(1.2)'; }} onMouseLeave={(e) => { e.target.style.transform = 'scale(1)'; }}>★</span>);
-      }
-      return stars;
-    };
     const getDisplayValue = (value) => value || 'Не указано';
-    const isHRorAdmin = hasPermission('candidates.edit') || hasPermission('candidates.archive');
-    
-    // Находим собеседование этого кандидата
-    const candidateInterview = interviews.find(i => i.candidateId === selectedCandidate.id);
+    const canEdit = hasPermission('candidates.edit');
+    const canArchive = hasPermission('candidates.archive');
+
+    // Собираем компетенции из последних завершённых собеседований
+    const candidateInterviews = interviews.filter(i => i.candidateId === selectedCandidate.id);
+    const concludedInterviews = candidateInterviews.filter(i => i.status === 'Проведено');
+    const competencyMap = {};
+    concludedInterviews.sort((a, b) => new Date(b.date) - new Date(a.date));
+    concludedInterviews.forEach(interview => {
+      (interview.matrix || []).forEach(m => {
+        if (!competencyMap[m.competencyId]) {
+          competencyMap[m.competencyId] = { name: m.competencyName || m.name, score: m.score, maxScore: m.maxScore || 5 };
+        }
+      });
+    });
+    const competencyEntries = Object.values(competencyMap);
+
+    // Форматирование телефона для редактирования
+    const formatPhoneForEdit = (digits) => {
+      if (!digits) return '';
+      const p = digits.replace(/\D/g, '');
+      if (p.length <= 1) return '+' + p;
+      if (p.length <= 4) return '+' + p.slice(0,1) + ' (' + p.slice(1);
+      if (p.length <= 7) return '+' + p.slice(0,1) + ' (' + p.slice(1,4) + ') ' + p.slice(4);
+      return '+' + p.slice(0,1) + ' (' + p.slice(1,4) + ') ' + p.slice(4,7) + '-' + p.slice(7,9) + '-' + p.slice(9);
+    };
 
     return (
       <div style={{ padding: '24px', maxWidth: '900px', margin: '0 auto' }}>
@@ -1048,37 +1173,54 @@ function App() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
           <h1 style={{ fontSize: '32px', fontWeight: '700', color: '#ffffff' }}>{selectedCandidate.name}</h1>
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-            {candidateInterview && (
-              <button onClick={() => { setSelectedInterview(candidateInterview); setShowInterviewCard(true); }} style={{ padding: '8px 20px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Перейти к собеседованию</button>
+            {candidateInterviews.length > 0 && (
+              <button onClick={() => { navigate('interviews', { state: { searchQuery: selectedCandidate.name } }); setSelectedCandidate(null); setRatings({}); setIsEditing(false); }} style={{ padding: '8px 20px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Перейти к собеседованиям</button>
             )}
-            {isHRorAdmin && (
-              <div style={{ display: 'flex', gap: '12px' }}>
-                {!isEditing ? (
-                  <>
-                    <button onClick={() => { setIsEditing(true); setEditData({ phone: selectedCandidate.phone || '', city: selectedCandidate.city || '', vacancy: selectedCandidate.vacancy || '', experience: selectedCandidate.experience || '', education: selectedCandidate.education || '', previousJob: selectedCandidate.previousJob || '', skills: Array.isArray(selectedCandidate.skills) ? selectedCandidate.skills.join(', ') : '' }); }} style={{ padding: '8px 20px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Редактировать</button>
-                    <button onClick={() => handleArchiveCandidate(selectedCandidate.id)} style={{ padding: '8px 20px', background: selectedCandidate.isArchived ? '#3E503A' : '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = selectedCandidate.isArchived ? '#4A6A4A' : '#4A5A70'} onMouseLeave={(e) => e.target.style.background = selectedCandidate.isArchived ? '#3E503A' : '#333F50'}>{selectedCandidate.isArchived ? 'Разархивировать' : 'Архивировать'}</button>
-                  </>
-                ) : (
-                  <>
-                    <button onClick={handleSaveEdit} style={{ padding: '8px 20px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Сохранить</button>
-                    <button onClick={handleCancelEdit} style={{ padding: '8px 20px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Отмена</button>
-                  </>
-                )}
-              </div>
+            {!isEditing ? (
+              <>
+                {canEdit && <button onClick={() => { setIsEditing(true); setEditData({ phone: selectedCandidate.phone || '', city: selectedCandidate.city || '', experience: selectedCandidate.experience || '', education: selectedCandidate.education || '', previousJob: selectedCandidate.previousJob || '', skills: Array.isArray(selectedCandidate.skills) ? selectedCandidate.skills.join(', ') : '' }); }} style={{ padding: '8px 20px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Редактировать</button>}
+                {canArchive && <button onClick={() => { handleArchiveCandidate(selectedCandidate.id); setSelectedCandidate({ ...selectedCandidate, isArchived: !selectedCandidate.isArchived }); }} style={{ padding: '8px 20px', background: selectedCandidate.isArchived ? '#3E503A' : '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = selectedCandidate.isArchived ? '#4A6A4A' : '#4A5A70'} onMouseLeave={(e) => e.target.style.background = selectedCandidate.isArchived ? '#3E503A' : '#333F50'}>{selectedCandidate.isArchived ? 'Разархивировать' : 'Архивировать'}</button>}
+                {hasPermission('candidates.delete') && <button onClick={() => handleDeleteCandidate(selectedCandidate.id)} style={{ padding: '8px 20px', background: '#4E1717', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#6E2727'} onMouseLeave={(e) => e.target.style.background = '#4E1717'}>Удалить</button>}
+              </>
+            ) : (
+              <>
+                <button onClick={handleSaveEdit} style={{ padding: '8px 20px', background: '#3E503A', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A6A4A'} onMouseLeave={(e) => e.target.style.background = '#3E503A'}>Сохранить</button>
+                <button onClick={handleCancelEdit} style={{ padding: '8px 20px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Отмена</button>
+              </>
             )}
           </div>
         </div>
         <div style={{ background: '#171D24', padding: '24px 28px', borderRadius: '12px', marginBottom: '24px' }}>
-          <div style={{ display: 'flex', padding: '10px 0', borderBottom: '1px solid #2A3344' }}><span style={{ fontSize: '14px', color: '#6A7787', minWidth: '180px' }}>Номер телефона:</span>{isEditing ? <input type="tel" value={editData.phone} onChange={(e) => { const value = e.target.value.replace(/\D/g, ''); if (value.length <= 11) handleEditChange('phone', value); }} placeholder="89991234567" style={{ background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', padding: '4px 12px', fontSize: '14px', outline: 'none', width: '100%', maxWidth: '200px', flex: 1, boxSizing: 'border-box' }} maxLength="11" /> : <span style={{ fontSize: '14px', color: '#ffffff', flex: 1 }}>{formatPhone(selectedCandidate.phone)}</span>}</div>
+          <div style={{ display: 'flex', padding: '10px 0', borderBottom: '1px solid #2A3344' }}><span style={{ fontSize: '14px', color: '#6A7787', minWidth: '180px' }}>Номер телефона:</span>{isEditing ? <input type="tel" value={formatPhoneForEdit(editData.phone)} onChange={(e) => { const value = e.target.value.replace(/\D/g, ''); if (value.length <= 11) handleEditChange('phone', value); }} onFocus={(e) => { if (!editData.phone) handleEditChange('phone', '7'); }} placeholder="+7 (___) ___-__-__" style={{ background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', padding: '4px 12px', fontSize: '14px', outline: 'none', width: '100%', maxWidth: '200px', flex: 1, boxSizing: 'border-box' }} maxLength="18" /> : <span style={{ fontSize: '14px', color: '#ffffff', flex: 1 }}>{formatPhone(selectedCandidate.phone)}</span>}</div>
           <div style={{ display: 'flex', padding: '10px 0', borderBottom: '1px solid #2A3344' }}><span style={{ fontSize: '14px', color: '#6A7787', minWidth: '180px' }}>Город:</span>{isEditing ? <input type="text" value={editData.city} onChange={(e) => handleEditChange('city', e.target.value)} style={{ background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', padding: '4px 12px', fontSize: '14px', outline: 'none', width: '100%', maxWidth: '200px', flex: 1, boxSizing: 'border-box' }} /> : <span style={{ fontSize: '14px', color: '#ffffff', flex: 1 }}>{getDisplayValue(selectedCandidate.city)}</span>}</div>
-          <div style={{ display: 'flex', padding: '10px 0', borderBottom: '1px solid #2A3344' }}><span style={{ fontSize: '14px', color: '#6A7787', minWidth: '180px' }}>Вакансия:</span>{isEditing ? <select value={editData.vacancy} onChange={(e) => handleEditChange('vacancy', e.target.value)} style={{ background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', padding: '4px 12px', fontSize: '14px', outline: 'none', width: '100%', maxWidth: '200px', flex: 1, boxSizing: 'border-box' }}><option value="">Выберите вакансию</option>{vacanciesList.filter(v => !v.isArchived).map((v) => <option key={v.id} value={v.title}>{v.title}</option>)}</select> : <span style={{ fontSize: '14px', color: '#ffffff', flex: 1 }}>{getDisplayValue(selectedCandidate.vacancy)}</span>}</div>
-          <div style={{ display: 'flex', padding: '10px 0', borderBottom: '1px solid #2A3344' }}><span style={{ fontSize: '14px', color: '#6A7787', minWidth: '180px' }}>Опыт работы:</span>{isEditing ? <select value={editData.experience} onChange={(e) => handleEditChange('experience', e.target.value)} style={{ background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', padding: '4px 12px', fontSize: '14px', outline: 'none', width: '100%', maxWidth: '200px', flex: 1, boxSizing: 'border-box' }}><option value="">Выберите уровень</option><option value="Junior (0-1 год)">Junior (0-1 год)</option><option value="Middle (2-4 года)">Middle (2-4 года)</option><option value="Senior (5+ лет)">Senior (5+ лет)</option></select> : <span style={{ fontSize: '14px', color: '#ffffff', flex: 1 }}>{getDisplayValue(selectedCandidate.experience)}</span>}</div>
+          <div style={{ display: 'flex', padding: '10px 0', borderBottom: '1px solid #2A3344' }}><span style={{ fontSize: '14px', color: '#6A7787', minWidth: '180px' }}>Опыт работы:</span>{isEditing ? <input type="text" value={editData.experience} onChange={(e) => handleEditChange('experience', e.target.value)} placeholder="Например: 3 года в backend" style={{ background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', padding: '4px 12px', fontSize: '14px', outline: 'none', width: '100%', maxWidth: '200px', flex: 1, boxSizing: 'border-box' }} /> : <span style={{ fontSize: '14px', color: '#ffffff', flex: 1 }}>{getDisplayValue(selectedCandidate.experience)}</span>}</div>
           <div style={{ display: 'flex', padding: '10px 0', borderBottom: '1px solid #2A3344' }}><span style={{ fontSize: '14px', color: '#6A7787', minWidth: '180px' }}>Образование:</span>{isEditing ? <input type="text" value={editData.education} onChange={(e) => handleEditChange('education', e.target.value)} style={{ background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', padding: '4px 12px', fontSize: '14px', outline: 'none', width: '100%', maxWidth: '200px', flex: 1, boxSizing: 'border-box' }} /> : <span style={{ fontSize: '14px', color: '#ffffff', flex: 1 }}>{getDisplayValue(selectedCandidate.education)}</span>}</div>
-          <div style={{ display: 'flex', padding: '10px 0', borderBottom: '1px solid #2A3344' }}><span style={{ fontSize: '14px', color: '#6A7787', minWidth: '180px' }}>Предыдущее место работы:</span>{isEditing ? <input type="text" value={editData.previousJob} onChange={(e) => handleEditChange('previousJob', e.target.value)} style={{ background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', padding: '4px 12px', fontSize: '14px', outline: 'none', width: '100%', maxWidth: '200px', flex: 1, boxSizing: 'border-box' }} /> : <span style={{ fontSize: '14px', color: '#ffffff', flex: 1 }}>{getDisplayValue(selectedCandidate.previousJob)}</span>}</div>
+          <div style={{ display: 'flex', padding: '10px 0', borderBottom: '1px solid #2A3344' }}><span style={{ fontSize: '14px', color: '#6A7787', minWidth: '180px' }}>Пред. место работы:</span>{isEditing ? <input type="text" value={editData.previousJob} onChange={(e) => handleEditChange('previousJob', e.target.value)} style={{ background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', padding: '4px 12px', fontSize: '14px', outline: 'none', width: '100%', maxWidth: '200px', flex: 1, boxSizing: 'border-box' }} /> : <span style={{ fontSize: '14px', color: '#ffffff', flex: 1, wordBreak: 'break-word' }}>{getDisplayValue(selectedCandidate.previousJob)}</span>}</div>
         </div>
         <div style={{ background: '#171D24', padding: '24px 28px', borderRadius: '12px' }}>
-          <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#ffffff', marginBottom: '20px' }}>Навыки{userRole === 'reshala' && <span style={{ fontSize: '12px', color: '#6A7787', marginLeft: '12px' }}>(только просмотр)</span>}{!isEditing && userRole !== 'reshala' && <span style={{ fontSize: '12px', color: '#6A7787', marginLeft: '12px' }}>(для оценки нажмите "Редактировать")</span>}</h2>
-          {skills.map((skill, index) => (<div key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: index < skills.length - 1 ? '1px solid #2A3344' : 'none' }}><span style={{ fontSize: '14px', color: '#ffffff', flex: 1 }}>{skill}</span><div style={{ display: 'flex', gap: '4px' }}>{renderStars(index)}</div></div>))}
+          <div style={{ display: 'flex', padding: '10px 0', borderBottom: '1px solid #2A3344' }}>
+            <span style={{ fontSize: '14px', color: '#6A7787', minWidth: '180px' }}>Навыки:</span>
+            <span style={{ fontSize: '14px', color: '#ffffff', flex: 1 }}>{selectedCandidate.skills && selectedCandidate.skills.length > 0 ? selectedCandidate.skills.join(', ') : 'Не указаны'}</span>
+          </div>
+          <div style={{ padding: '10px 0' }}>
+            <span style={{ fontSize: '14px', color: '#6A7787', minWidth: '180px', display: 'block', marginBottom: '12px' }}>Компетенции:</span>
+            {competencyEntries.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {competencyEntries.map((comp, idx) => (
+                  <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: '#11171F', borderRadius: '8px' }}>
+                    <span style={{ fontSize: '14px', color: '#ffffff', flex: 1 }}>{comp.name}</span>
+                    <div style={{ display: 'flex', gap: '2px' }}>
+                      {[1,2,3,4,5].map(star => (
+                        <span key={star} style={{ fontSize: '18px', color: star <= comp.score ? '#7F7B6D' : '#3A3F4A', textShadow: star <= comp.score ? 'none' : '0 0 0 1px #7F7B6D', opacity: star <= comp.score ? 1 : 0.4 }}>★</span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <span style={{ fontSize: '13px', color: '#6A7787' }}>Нет оценок по компетенциям</span>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -1259,7 +1401,14 @@ function App() {
                 {/* Завершить / Отменить — только для Запланировано */}
                 {selectedInterview.status === 'Запланировано' && hasPermission('interviews.edit') && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <button onClick={() => { if (window.confirm('Завершить собеседование? Статус изменится на "Проведено".')) handleDecision(selectedInterview.id, 'Ожидает'); }} style={{ padding: '10px 16px', background: '#3E503A', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s', fontFamily: "'Unbounded', sans-serif", textAlign: 'left' }} onMouseEnter={(e) => e.target.style.background = '#4A6A4A'} onMouseLeave={(e) => e.target.style.background = '#3E503A'}>Завершить</button>
+                    <button onClick={() => {
+                      const matrix = selectedInterview.matrix || [];
+                      const allRated = matrix.length > 0 && matrix.every(m => m.score > 0);
+                      const comment = interviewComments || selectedInterview?.comments || '';
+                      if (!allRated) { alert('Оцените все компетенции звёздами перед завершением.'); return; }
+                      if (!comment.trim()) { alert('Добавьте комментарий перед завершением.'); return; }
+                      if (window.confirm('Завершить собеседование? Статус изменится на "Проведено".')) handleDecision(selectedInterview.id, 'Ожидает');
+                    }} style={{ padding: '10px 16px', background: '#3E503A', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s', fontFamily: "'Unbounded', sans-serif", textAlign: 'left' }} onMouseEnter={(e) => e.target.style.background = '#4A6A4A'} onMouseLeave={(e) => e.target.style.background = '#3E503A'}>Завершить</button>
                     <button onClick={() => { if (window.confirm('Отменить собеседование? Статус изменится на "Отменено".')) handleDecision(selectedInterview.id, 'Без решения'); }} style={{ padding: '10px 16px', background: '#4E1717', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s', fontFamily: "'Unbounded', sans-serif", textAlign: 'left' }} onMouseEnter={(e) => e.target.style.background = '#6E2727'} onMouseLeave={(e) => e.target.style.background = '#4E1717'}>Отменить</button>
                   </div>
                 )}
@@ -1269,10 +1418,13 @@ function App() {
                     <button onClick={() => handleDecision(selectedInterview.id, 'Принят')} style={{ padding: '10px 16px', background: '#3E503A', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s', fontFamily: "'Unbounded', sans-serif", textAlign: 'left' }} onMouseEnter={(e) => e.target.style.background = '#4A6A4A'} onMouseLeave={(e) => e.target.style.background = '#3E503A'}>Нанять</button>
                     <button onClick={() => handleDecision(selectedInterview.id, 'Отказан')} style={{ padding: '10px 16px', background: '#4E1717', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s', fontFamily: "'Unbounded', sans-serif", textAlign: 'left' }} onMouseEnter={(e) => e.target.style.background = '#6E2727'} onMouseLeave={(e) => e.target.style.background = '#4E1717'}>Отклонить</button>
                     <button onClick={() => handleDecision(selectedInterview.id, 'Следующий этап')} style={{ padding: '10px 16px', background: '#0891b2', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s', fontFamily: "'Unbounded', sans-serif", textAlign: 'left' }} onMouseEnter={(e) => e.target.style.background = '#06b6d4'} onMouseLeave={(e) => e.target.style.background = '#0891b2'}>Следующий этап</button>
+                    <button onClick={() => handleDecision(selectedInterview.id, 'Кадровый резерв')} style={{ padding: '10px 16px', background: '#854d0e', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s', fontFamily: "'Unbounded', sans-serif", textAlign: 'left' }} onMouseEnter={(e) => e.target.style.background = '#a16207'} onMouseLeave={(e) => e.target.style.background = '#854d0e'}>Кадровый резерв</button>
                   </div>
                 )}
                 {/* Разделитель перед скачиванием */}
                 <div style={{ borderTop: '1px solid #2A3344', margin: '4px 0' }} />
+                {/* Удаление */}
+                {hasPermission('interviews.delete') && <button onClick={() => handleDeleteInterview(selectedInterview.id)} style={{ padding: '10px 16px', background: '#4E1717', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s', fontFamily: "'Unbounded', sans-serif", textAlign: 'left' }} onMouseEnter={(e) => e.target.style.background = '#6E2727'} onMouseLeave={(e) => e.target.style.background = '#4E1717'}>Удалить собеседование</button>}
                 {/* Скачивание PDF */}
                 <button onClick={() => pdfGenerate('Карточка кандидата', selectedInterview)} style={{ padding: '10px 16px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s', fontFamily: "'Unbounded', sans-serif", textAlign: 'left' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Скачать карточку кандидата</button>
                 <button onClick={() => pdfGenerate('Протокол собеседования', selectedInterview)} style={{ padding: '10px 16px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s', fontFamily: "'Unbounded', sans-serif", textAlign: 'left' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Скачать протокол собеседования</button>
@@ -1289,7 +1441,7 @@ function App() {
   const renderInterviewsPage = () => {
     const filteredInterviews = getFilteredInterviews();
     const getStatusColor = (status) => { switch(status) { case 'Запланировано': return '#7F7B6D'; case 'Проведено': return '#3E503A'; case 'Отменено': return '#4E1717'; default: return '#6A7787'; } };
-    const getDecisionColor = (decision) => { switch(decision) { case 'Принят': return '#3E503A'; case 'Отказан': return '#4E1717'; case 'Ожидает': return '#7F7B6D'; case 'Без решения': return '#4E1717'; case 'Следующий этап': return '#333F50'; default: return '#6A7787'; } };
+    const getDecisionColor = (decision) => { switch(decision) { case 'Принят': return '#3E503A'; case 'Отказан': return '#4E1717'; case 'Ожидает': return '#7F7B6D'; case 'Без решения': return '#4E1717'; case 'Следующий этап': return '#0891b2'; case 'Кадровый резерв': return '#854d0e'; default: return '#6A7787'; } };
     const isHRorAdmin = hasPermission('interviews.create') || hasPermission('interviews.edit');
     const today = new Date().toISOString().split('T')[0];
     
@@ -1306,44 +1458,34 @@ function App() {
             <button onClick={() => setShowArchivedInterviews(!showArchivedInterviews)} style={{ padding: '8px 20px', background: showArchivedInterviews ? '#3E503A' : '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = showArchivedInterviews ? '#4A6A4A' : '#4A5A70'} onMouseLeave={(e) => e.target.style.background = showArchivedInterviews ? '#3E503A' : '#333F50'}>{showArchivedInterviews ? 'Скрыть архив' : 'Показать архив'}</button>
           </div>
         </div>
-        <div style={{ marginBottom: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-            <input
-              type="text"
-              placeholder="Поиск по кандидату или вакансии..."
-              value={searchQueryInterviews}
-              onChange={(e) => setSearchQueryInterviews(e.target.value)}
-              style={{ flex: 1, padding: '10px 16px', background: '#171D24', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', minWidth: '180px' }}
-            />
-            <input
-              type="date"
-              placeholder="Дата от"
-              value={dateFilterFrom}
-              onChange={(e) => setDateFilterFrom(e.target.value)}
-              style={{ padding: '10px 16px', background: '#171D24', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', cursor: 'pointer' }}
-            />
-            <input
-              type="date"
-              placeholder="Дата до"
-              value={dateFilterTo}
-              onChange={(e) => setDateFilterTo(e.target.value)}
-              style={{ padding: '10px 16px', background: '#171D24', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', cursor: 'pointer' }}
-            />
-            {(dateFilterFrom || dateFilterTo) && (
-              <button
-                onClick={() => { setDateFilterFrom(''); setDateFilterTo(''); }}
-                style={{ padding: '8px 16px', background: '#4E1717', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '12px' }}
-                onMouseEnter={(e) => e.target.style.background = '#6E2727'}
-                onMouseLeave={(e) => e.target.style.background = '#4E1717'}
-              >
-                Сбросить даты
-              </button>
-            )}
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-            {statuses.map((status) => (<button key={status} onClick={() => setStatusFilter(status)} style={{ padding: '6px 16px', background: statusFilter === status ? '#333F50' : 'transparent', border: '1px solid #6A7787', borderRadius: '20px', color: statusFilter === status ? '#ffffff' : '#6A7787', cursor: 'pointer', fontSize: '13px', transition: 'all 0.2s', fontFamily: "'Unbounded', sans-serif" }} onMouseEnter={(e) => { if (statusFilter !== status) e.target.style.color = '#ffffff'; }} onMouseLeave={(e) => { if (statusFilter !== status) e.target.style.color = '#6A7787'; }}>{status}</button>))}
-          </div>
-        </div>
+        <SearchFilter
+          searchQuery={searchQueryInterviews}
+          setSearchQuery={setSearchQueryInterviews}
+          placeholder="Поиск по кандидату, вакансии, интервьюеру..."
+          filters={[
+            { key: 'date', type: 'date', label: 'Дата собеседования' },
+            { key: 'status', type: 'select', label: 'Статус', options: statuses.slice(1) },
+            { key: 'sort', type: 'sort', label: 'Сортировка', options: [
+              { value: 'newest', label: 'Сначала новые' },
+              { value: 'oldest', label: 'Сначала старые' },
+              { value: 'alphabet', label: 'По алфавиту' },
+            ]},
+          ]}
+          activeFilters={{
+            dateFrom: dateFilterFrom, dateTo: dateFilterTo,
+            status: Array.isArray(statusFilter) ? statusFilter : (statusFilter && statusFilter !== 'Все' ? [statusFilter] : []),
+            sort: [interviewSortOption],
+          }}
+          setFilter={(key, val) => {
+            if (key === 'dateFrom') setDateFilterFrom(val);
+            else if (key === 'dateTo') setDateFilterTo(val);
+            else if (key === 'status') setStatusFilter(val);
+            else if (key === 'sort') setInterviewSortOption(val.length > 0 ? val[0] : 'newest');
+          }}
+          clearAllFilters={() => { setDateFilterFrom(''); setDateFilterTo(''); setStatusFilter([]); setSearchQueryInterviews(''); setInterviewSortOption('newest'); }}
+          totalCount={interviews.length}
+          filteredCount={filteredInterviews.length}
+        />
 
         <div style={{ background: '#171D24', borderRadius: '12px', overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '700px' }}>
@@ -1368,6 +1510,7 @@ function App() {
                       {hasPermission('interviews.edit') && editingInterviewId !== interview.id && !interview.isArchived && <button onClick={() => startEditInterview(interview)} style={{ padding: '4px 16px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', width: '100%', maxWidth: '140px' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Редактировать</button>}
                       {editingInterviewId === interview.id && (<><button onClick={saveEditInterview} style={{ padding: '4px 16px', background: '#3E503A', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', width: '100%', maxWidth: '140px' }} onMouseEnter={(e) => e.target.style.background = '#4A6A4A'} onMouseLeave={(e) => e.target.style.background = '#3E503A'}>Сохранить</button><button onClick={cancelEditInterview} style={{ padding: '4px 16px', background: '#4E1717', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', width: '100%', maxWidth: '140px' }} onMouseEnter={(e) => e.target.style.background = '#6E2727'} onMouseLeave={(e) => e.target.style.background = '#4E1717'}>Отмена</button></>)}
                       {isHRorAdmin && editingInterviewId !== interview.id && <button onClick={() => interview.isArchived ? handleUnarchiveInterview(interview.id) : handleArchiveInterview(interview.id)} style={{ padding: '4px 16px', background: interview.isArchived ? '#3E503A' : '#333F50', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', width: '100%', maxWidth: '140px' }} onMouseEnter={(e) => e.target.style.background = interview.isArchived ? '#4A6A4A' : '#4A5A70'} onMouseLeave={(e) => e.target.style.background = interview.isArchived ? '#3E503A' : '#333F50'}>{interview.isArchived ? 'Разархивировать' : 'Архивировать'}</button>}
+                      {hasPermission('interviews.delete') && editingInterviewId !== interview.id && <button onClick={() => handleDeleteInterview(interview.id)} style={{ padding: '4px 16px', background: '#4E1717', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', width: '100%', maxWidth: '140px' }} onMouseEnter={(e) => e.target.style.background = '#6E2727'} onMouseLeave={(e) => e.target.style.background = '#4E1717'}>Удалить</button>}
                     </div>
                   </td>
                 </tr>);
@@ -1378,6 +1521,39 @@ function App() {
         {renderScheduleModal()}
       </div>
     );
+  };
+
+  // --- ВЫЧИСЛЕНИЕ СТАТУСА КАНДИДАТА ---
+  const getCandidateStatus = (candidateId) => {
+    const candidateInterviews = interviews.filter(i => i.candidateId === candidateId && !i.isArchived);
+    if (candidateInterviews.length === 0) return 'Активен';
+
+    const statuses = candidateInterviews.map(i => ({ status: i.status, decision: i.decision, archived: i.isArchived }));
+    const concluded = statuses.filter(i => i.status === 'Проведено');
+    const pending = statuses.filter(i => i.status === 'Запланировано');
+
+    const hasHired = concluded.some(i => i.decision === 'Принят');
+    const hasTalentPool = concluded.some(i => i.decision === 'Кадровый резерв');
+    const allRejectedOrNext = concluded.length > 0 && concluded.every(i => i.decision === 'Отказан' || i.decision === 'Без решения' || i.decision === 'Следующий этап');
+
+    if (hasHired) return 'Нанят';
+    if (hasTalentPool) return 'В кадровом резерве';
+    if (pending.length > 0) {
+      if (allRejectedOrNext || concluded.length === 0) return 'Ожидает собеседования';
+      return 'Ожидает решения';
+    }
+    if (allRejectedOrNext) return 'Ожидает собеседования';
+    if (concluded.length > 0 && concluded.every(i => i.decision === 'Отказан' || i.decision === 'Без решения')) return 'Отклонён';
+    return 'Активен';
+  };
+
+  const CANDIDATE_STATUS_COLORS = {
+    'Активен': { bg: '#3E503A', text: '#ffffff' },
+    'Ожидает собеседования': { bg: '#7F7B6D', text: '#ffffff' },
+    'Ожидает решения': { bg: '#0891b2', text: '#ffffff' },
+    'Нанят': { bg: '#065f46', text: '#ffffff' },
+    'В кадровом резерве': { bg: '#1d4ed8', text: '#ffffff' },
+    'Отклонён': { bg: '#4E1717', text: '#ffffff' },
   };
 
   // --- СТРАНИЦА КАНДИДАТОВ ---
@@ -1392,21 +1568,57 @@ function App() {
             <button onClick={() => setShowArchivedCandidates(!showArchivedCandidates)} style={{ padding: '8px 20px', background: showArchivedCandidates ? '#3E503A' : '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = showArchivedCandidates ? '#4A6A4A' : '#4A5A70'} onMouseLeave={(e) => e.target.style.background = showArchivedCandidates ? '#3E503A' : '#333F50'}>{showArchivedCandidates ? 'Скрыть архив' : 'Показать архив'}</button>
           </div>
         </div>
-        <div style={{ marginBottom: '24px', position: 'relative' }}>
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <input type="text" placeholder="Поиск" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ flex: 1, padding: '10px 16px', background: '#171D24', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none' }} />
-            <button onClick={() => setShowSortMenu(!showSortMenu)} style={{ padding: '10px 16px', background: '#171D24', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', cursor: 'pointer', fontSize: '14px', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = 'transparent'}>Фильтр ▼</button>
-          </div>
-          {showSortMenu && <div style={{ position: 'absolute', top: '50px', right: 0, background: '#171D24', border: '1px solid #6A7787', borderRadius: '8px', padding: '8px 0', minWidth: '180px', zIndex: 10 }}><button onClick={() => { setSortOption('newest'); setShowSortMenu(false); }} style={{ display: 'block', width: '100%', padding: '10px 16px', background: sortOption === 'newest' ? '#4F4F50' : 'none', border: 'none', color: '#ffffff', textAlign: 'left', cursor: 'pointer', fontSize: '14px', transition: 'background 0.2s' }}>Сначала новые</button><button onClick={() => { setSortOption('oldest'); setShowSortMenu(false); }} style={{ display: 'block', width: '100%', padding: '10px 16px', background: sortOption === 'oldest' ? '#4F4F50' : 'none', border: 'none', color: '#ffffff', textAlign: 'left', cursor: 'pointer', fontSize: '14px', transition: 'background 0.2s' }}>Сначала старые</button><button onClick={() => { setSortOption('alphabet'); setShowSortMenu(false); }} style={{ display: 'block', width: '100%', padding: '10px 16px', background: sortOption === 'alphabet' ? '#4F4F50' : 'none', border: 'none', color: '#ffffff', textAlign: 'left', cursor: 'pointer', fontSize: '14px', transition: 'background 0.2s' }}>По алфавиту</button></div>}
-        </div>
+        <SearchFilter
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          placeholder="Поиск по имени, телефону, вакансии..."
+          filters={[
+            { key: 'candidateStatus', type: 'select', label: 'Статус', options: ['Активен', 'Ожидает собеседования', 'Ожидает решения', 'Нанят', 'В кадровом резерве', 'Отклонён'] },
+            { key: 'experience', type: 'select', label: 'Опыт работы', options: ['Junior (0-1 год)', 'Middle (2-4 года)', 'Senior (5+ лет)'] },
+            { key: 'sort', type: 'sort', label: 'Сортировка', options: [
+              { value: 'newest', label: 'Сначала новые' },
+              { value: 'oldest', label: 'Сначала старые' },
+              { value: 'alphabet', label: 'По алфавиту' },
+            ]},
+          ]}
+          activeFilters={{
+            sort: Array.isArray(sortOption) ? sortOption : [sortOption],
+            candidateStatus: Array.isArray(candidateStatusFilter) ? candidateStatusFilter : (candidateStatusFilter && candidateStatusFilter !== 'Все' ? [candidateStatusFilter] : []),
+            experience: Array.isArray(experienceFilter) ? experienceFilter : (experienceFilter && experienceFilter !== 'Все' ? [experienceFilter] : []),
+          }}
+          setFilter={(key, val) => {
+            if (key === 'sort') setSortOption(val.length > 0 ? val[0] : 'newest');
+            else if (key === 'candidateStatus') setCandidateStatusFilter(val);
+            else if (key === 'experience') setExperienceFilter(val);
+          }}
+          clearAllFilters={() => { setSortOption('newest'); setSearchQuery(''); setCandidateStatusFilter([]); setExperienceFilter([]); }}
+          totalCount={candidates.length}
+          filteredCount={filteredCandidates.length}
+        />
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {filteredCandidates.map((candidate) => (<div key={candidate.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', background: '#171D24', borderRadius: '12px', transition: 'all 0.2s', opacity: candidate.isArchived ? 0.6 : 1 }}>
-            <div><h3 style={{ fontSize: '16px', fontWeight: '600', color: '#ffffff' }}>{candidate.name}</h3><p style={{ fontSize: '14px', color: '#6A7787', marginTop: '4px' }}>{formatPhone(candidate.phone)}</p><p style={{ fontSize: '14px', color: '#6A7787', marginTop: '2px' }}>{candidate.vacancy}</p></div>
+          {filteredCandidates.map((candidate) => {
+            const candidateStatus = getCandidateStatus(candidate.id);
+            const statusColor = CANDIDATE_STATUS_COLORS[candidateStatus] || CANDIDATE_STATUS_COLORS['Активен'];
+            return (<div key={candidate.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', background: '#171D24', borderRadius: '12px', transition: 'all 0.2s', opacity: candidate.isArchived ? 0.6 : 1 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#ffffff' }}>{candidate.name}</h3>
+                <span style={{ padding: '3px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: '600', background: statusColor.bg, color: statusColor.text }}>{candidateStatus}</span>
+              </div>
+              <div style={{ display: 'flex', gap: '16px', marginTop: '6px', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '13px', color: '#6A7787' }}>{formatPhone(candidate.phone)}</span>
+                {candidate.city && <span style={{ fontSize: '13px', color: '#6A7787' }}>{candidate.city}</span>}
+                {candidate.experience && <span style={{ fontSize: '13px', color: '#6A7787' }}>{candidate.experience}</span>}
+                {candidate.vacancy && <span style={{ fontSize: '13px', color: '#6A7787' }}>{candidate.vacancy}</span>}
+                {candidate.createdAt && <span style={{ fontSize: '12px', color: '#4a5568' }}>с {formatDate(candidate.createdAt)}</span>}
+              </div>
+            </div>
             <div style={{ display: 'flex', gap: '10px' }}>
               {!candidate.isArchived && <button onClick={() => { setSelectedCandidate(candidate); setRatings(candidate.ratings || {}); setIsEditing(false); }} style={{ background: 'none', border: 'none', color: '#6A7787', fontSize: '12px', cursor: 'pointer', transition: 'color 0.2s' }} onMouseEnter={(e) => e.target.style.color = '#ffffff'} onMouseLeave={(e) => e.target.style.color = '#6A7787'}>Перейти к карточке</button>}
               {hasPermission('candidates.archive') && <button onClick={() => handleArchiveCandidate(candidate.id)} style={{ background: 'none', border: 'none', color: candidate.isArchived ? '#3E503A' : '#6A7787', fontSize: '12px', cursor: 'pointer', transition: 'color 0.2s' }} onMouseEnter={(e) => e.target.style.color = candidate.isArchived ? '#4A6A4A' : '#ffffff'} onMouseLeave={(e) => e.target.style.color = candidate.isArchived ? '#3E503A' : '#6A7787'}>{candidate.isArchived ? 'Разархивировать' : 'Архивировать'}</button>}
             </div>
-          </div>))}
+          </div>);
+          })}
         </div>
         {renderAddModal()}
       </div>
@@ -1431,22 +1643,27 @@ function App() {
           </div>
         </div>
 
-        <div style={{ marginBottom: '24px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-          <input
-            type="text"
-            placeholder="Поиск по названию или описанию..."
-            value={searchQueryCompetencies}
-            onChange={(e) => setSearchQueryCompetencies(e.target.value)}
-            style={{ flex: 1, padding: '10px 16px', background: '#171D24', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', minWidth: '200px' }}
-          />
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            style={{ padding: '10px 16px', background: '#171D24', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', cursor: 'pointer' }}
-          >
-            {filterCategories.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
-          </select>
-        </div>
+        <SearchFilter
+          searchQuery={searchQueryCompetencies}
+          setSearchQuery={setSearchQueryCompetencies}
+          placeholder="Поиск по названию или описанию..."
+          filters={[
+            { key: 'category', type: 'select', label: 'Категория', options: categories },
+            { key: 'sort', type: 'sort', label: 'Сортировка', options: [
+              { value: 'alphabet', label: 'По алфавиту А-Я' },
+              { value: 'reverse', label: 'По алфавиту Я-А' },
+              { value: 'category', label: 'По категории' },
+            ]},
+          ]}
+          activeFilters={{ category: Array.isArray(categoryFilter) ? categoryFilter : (categoryFilter && categoryFilter !== 'Все' ? [categoryFilter] : []), sort: [competencySortOption] }}
+          setFilter={(key, val) => {
+            if (key === 'category') setCategoryFilter(val);
+            else if (key === 'sort') setCompetencySortOption(val.length > 0 ? val[0] : 'newest');
+          }}
+          clearAllFilters={() => { setCategoryFilter([]); setSearchQueryCompetencies(''); setCompetencySortOption('newest'); }}
+          totalCount={competencies.length}
+          filteredCount={filteredCompetencies.length}
+        />
 
         <div style={{ background: '#171D24', borderRadius: '12px', overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '700px' }}>
@@ -1598,15 +1815,23 @@ function App() {
           </div>
         </div>
 
-        <div style={{ marginBottom: '24px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-          <input
-            type="text"
-            placeholder="Поиск по названию или описанию..."
-            value={searchQueryVacancies}
-            onChange={(e) => setSearchQueryVacancies(e.target.value)}
-            style={{ flex: 1, padding: '10px 16px', background: '#171D24', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', minWidth: '200px' }}
-          />
-        </div>
+        <SearchFilter
+          searchQuery={searchQueryVacancies}
+          setSearchQuery={setSearchQueryVacancies}
+          placeholder="Поиск по названию или описанию..."
+          filters={[
+            { key: 'sort', type: 'sort', label: 'Сортировка', options: [
+              { value: 'newest', label: 'Сначала новые' },
+              { value: 'oldest', label: 'Сначала старые' },
+              { value: 'alphabet', label: 'По алфавиту' },
+            ]},
+          ]}
+          activeFilters={{ sort: [vacancySortOption] }}
+          setFilter={(key, val) => { if (key === 'sort') setVacancySortOption(val.length > 0 ? val[0] : 'newest'); }}
+          clearAllFilters={() => { setSearchQueryVacancies(''); setVacancySortOption('newest'); }}
+          totalCount={vacanciesList.length}
+          filteredCount={filteredVacancies.length}
+        />
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {filteredVacancies.map((vacancy) => (
@@ -1813,39 +2038,33 @@ function App() {
           )}
         </div>
 
-        <div style={{ marginBottom: '24px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-          <input
-            type="text"
-            placeholder="Поиск по деталям, пользователю или ID объекта..."
-            value={searchQueryLogs}
-            onChange={(e) => setSearchQueryLogs(e.target.value)}
-            style={{ flex: 2, padding: '10px 16px', background: '#171D24', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', minWidth: '200px' }}
-          />
-          <select
-            value={areaFilter}
-            onChange={(e) => setAreaFilter(e.target.value)}
-            style={{ padding: '10px 16px', background: '#171D24', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', cursor: 'pointer' }}
-          >
-            {uniqueAreas.map((area) => <option key={area} value={area}>{area}</option>)}
-          </select>
-          <select
-            value={actionFilter}
-            onChange={(e) => setActionFilter(e.target.value)}
-            style={{ padding: '10px 16px', background: '#171D24', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', cursor: 'pointer' }}
-          >
-            {uniqueActions.map((action) => <option key={action} value={action}>{action}</option>)}
-          </select>
-          {(searchQueryLogs || areaFilter !== 'Все' || actionFilter !== 'Все') && (
-            <button
-              onClick={() => { setSearchQueryLogs(''); setAreaFilter('Все'); setActionFilter('Все'); }}
-              style={{ padding: '8px 20px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s' }}
-              onMouseEnter={(e) => e.target.style.background = '#4A5A70'}
-              onMouseLeave={(e) => e.target.style.background = '#333F50'}
-            >
-              Сбросить
-            </button>
-          )}
-        </div>
+        <SearchFilter
+          searchQuery={searchQueryLogs}
+          setSearchQuery={setSearchQueryLogs}
+          placeholder="Поиск по деталям, пользователю или ID объекта..."
+          filters={[
+            { key: 'area', type: 'select', label: 'Область', options: uniqueAreas },
+            { key: 'action', type: 'select', label: 'Действие', options: uniqueActions },
+            { key: 'date', type: 'date', label: 'Дата' },
+            { key: 'sort', type: 'sort', label: 'Сортировка', options: [
+              { value: 'newest', label: 'Сначала новые' },
+              { value: 'oldest', label: 'Сначала старые' },
+            ]},
+          ]}
+          activeFilters={{
+            area: Array.isArray(areaFilter) ? areaFilter : (areaFilter && areaFilter !== 'Все' ? [areaFilter] : []),
+            action: Array.isArray(actionFilter) ? actionFilter : (actionFilter && actionFilter !== 'Все' ? [actionFilter] : []),
+            sort: [logsSortOption],
+          }}
+          setFilter={(key, val) => {
+            if (key === 'area') setAreaFilter(val);
+            else if (key === 'action') setActionFilter(val);
+            else if (key === 'sort') setLogsSortOption(val.length > 0 ? val[0] : 'newest');
+          }}
+          clearAllFilters={() => { setSearchQueryLogs(''); setAreaFilter([]); setActionFilter([]); setLogsSortOption('newest'); }}
+          totalCount={logs.length}
+          filteredCount={filteredLogs.length}
+        />
 
         <div style={{ background: '#171D24', borderRadius: '12px', overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '800px' }}>
@@ -1948,7 +2167,7 @@ function App() {
               <h1 style={{ fontSize: '28px', fontWeight: '700', color: '#ffffff' }}>Роли и права</h1>
               <span style={{ fontSize: '16px', color: '#6A7787' }}>Всего: {roles.length}</span>
             </div>
-            <button onClick={openAddRoleModal} style={{ padding: '8px 20px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Добавить роль</button>
+            {hasPermission('users.create') && <button onClick={openAddRoleModal} style={{ padding: '8px 20px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Добавить роль</button>}
           </div>
 
           {/* Табы */}
@@ -1967,8 +2186,8 @@ function App() {
                     <span style={{ fontSize: '13px', color: '#6A7787' }}>{role.permissions.length} прав</span>
                   </div>
                   <div style={{ display: 'flex', gap: '8px' }}>
-                    <button onClick={() => openEditRoleModal(role)} style={{ padding: '4px 12px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Редактировать</button>
-                    <button onClick={() => handleDeleteRole(role.id)} style={{ padding: '4px 12px', background: '#4E1717', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }} onMouseEnter={(e) => e.target.style.background = '#6E2727'} onMouseLeave={(e) => e.target.style.background = '#4E1717'}>Удалить</button>
+                    {hasPermission('users.edit') && <button onClick={() => openEditRoleModal(role)} style={{ padding: '4px 12px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Редактировать</button>}
+                    {hasPermission('users.delete') && <button onClick={() => handleDeleteRole(role.id)} style={{ padding: '4px 12px', background: '#4E1717', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }} onMouseEnter={(e) => e.target.style.background = '#6E2727'} onMouseLeave={(e) => e.target.style.background = '#4E1717'}>Удалить</button>}
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
@@ -2050,10 +2269,28 @@ function App() {
           <button onClick={() => setUsersTab('roles')} style={{ padding: '10px 24px', background: 'none', border: 'none', borderBottom: usersTab === 'roles' ? '2px solid #ffffff' : '2px solid transparent', color: usersTab === 'roles' ? '#ffffff' : '#6A7787', fontSize: '14px', fontWeight: '600', cursor: 'pointer', marginBottom: '-2px', transition: 'all 0.2s' }}>Роли и права</button>
         </div>
 
-        <div style={{ marginBottom: '24px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-          <input type="text" placeholder="Поиск по имени или логину..." value={searchQueryUsers} onChange={(e) => setSearchQueryUsers(e.target.value)} style={{ flex: 1, padding: '10px 16px', background: '#171D24', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', minWidth: '200px' }} />
-          <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} style={{ padding: '10px 16px', background: '#171D24', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', cursor: 'pointer' }}><option value="Все">Все роли</option>{roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select>
-        </div>
+        <SearchFilter
+          searchQuery={searchQueryUsers}
+          setSearchQuery={setSearchQueryUsers}
+          placeholder="Поиск по имени или логину..."
+          filters={[
+            { key: 'role', type: 'select', label: 'Роль', options: ['Все', ...roles.map(r => r.name)] },
+            { key: 'sort', type: 'sort', label: 'Сортировка', options: [
+              { value: 'newest', label: 'Сначала новые' },
+              { value: 'oldest', label: 'Сначала старые' },
+              { value: 'alphabet', label: 'По алфавиту' },
+            ]},
+          ]}
+          activeFilters={{ role: roleFilter }}
+          setFilter={(key, val) => {
+            if (key === 'role') {
+              setRoleFilter(val.length > 0 ? val.map(v => { const r = roles.find(r => r.name === v); return r ? r.id : v; }) : 'Все');
+            }
+          }}
+          clearAllFilters={() => { setSearchQueryUsers(''); setRoleFilter('Все'); }}
+          totalCount={users.length}
+          filteredCount={filteredUsers.length}
+        />
         <div style={{ background: '#171D24', borderRadius: '12px', overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '500px' }}>
             <thead style={{ background: '#11171F' }}><tr><th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', color: '#6A7787', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>ФИО</th><th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', color: '#6A7787', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Логин</th><th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', color: '#6A7787', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Почта</th><th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', color: '#6A7787', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Роль</th><th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', color: '#6A7787', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Действия</th></tr></thead>
@@ -2202,6 +2439,7 @@ function App() {
     { path: 'vacancies', label: 'Вакансии', perm: 'vacancies.view' },
     { path: 'logs', label: 'Журнал изменений', perm: 'logs.view' },
     { path: 'archive', label: 'Архив', perm: 'archive.view' },
+    { path: 'deleted', label: 'Удалённое', perm: 'deleted.view' },
   ];
   if (hasPermission('users.view')) {
     menuItems.splice(1, 0, { path: 'users', label: 'Пользователи', perm: 'users.view' });
@@ -2219,6 +2457,7 @@ function App() {
     if (currentPage === 'vacancies') return renderVacanciesPage();
     if (currentPage === 'logs') return renderLogsPage();
     if (currentPage === 'archive') return <ArchivePage candidates={candidates} interviews={interviews} competencies={competencies} handleArchiveCandidate={handleArchiveCandidate} handleUnarchiveInterview={handleUnarchiveInterview} handleArchiveCompetency={handleArchiveCompetency} />;
+    if (currentPage === 'deleted') return <DeletedPage hasPermission={hasPermission} />;
     return renderDashboardPage();
   };
 

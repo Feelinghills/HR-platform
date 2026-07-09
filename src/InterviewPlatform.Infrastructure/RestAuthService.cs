@@ -126,6 +126,14 @@ public sealed class RestAuthService : IAuthService
         response.EnsureSuccessStatusCode();
     }
 
+    public async Task<IReadOnlyList<UserDto>> ListDeletedUsersAsync(CancellationToken cancellationToken = default)
+    {
+        var response = await _http.GetAsync($"{_options.BaseUrl}/users/deleted", cancellationToken);
+        response.EnsureSuccessStatusCode();
+        var users = await response.Content.ReadFromJsonAsync<List<UserDto>>(JsonOptions, cancellationToken) ?? [];
+        return users;
+    }
+
     private static UserDto MapUser(UserDto user) => user;
 
     private sealed class LoginResponseDto

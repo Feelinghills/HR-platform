@@ -100,6 +100,21 @@ func main() {
 		})
 	})
 
+	// Deleted users endpoint (internal, no auth)
+	mux.HandleFunc("/api/users/deleted", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		users, err := authSvc.ListDeletedUsers(r.Context())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(users)
+	})
+
 	// Users REST endpoints
 	mux.HandleFunc("/api/users", func(w http.ResponseWriter, r *http.Request) {
 		// Internal service-to-service calls don't require user auth

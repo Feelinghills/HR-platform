@@ -81,6 +81,13 @@ public sealed class UsersController(IAuthService authService) : ControllerBase
         await authService.RestoreUserAsync(id, User.GetUserId(), cancellationToken);
         return NoContent();
     }
+
+    [Authorize(Roles = "Admin")]
+    [HttpGet("deleted")]
+    public async Task<ActionResult<IReadOnlyList<UserDto>>> ListDeleted(CancellationToken cancellationToken)
+    {
+        return Ok(await authService.ListDeletedUsersAsync(cancellationToken));
+    }
 }
 
 [ApiController]
@@ -148,6 +155,13 @@ public sealed class CandidatesController(ICandidateService candidateService) : C
     {
         await candidateService.RestoreAsync(id, User.GetUserId(), cancellationToken);
         return NoContent();
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpGet("deleted")]
+    public async Task<ActionResult<IReadOnlyList<CandidateDto>>> ListDeleted([FromQuery] string? search, CancellationToken cancellationToken)
+    {
+        return Ok(await candidateService.ListDeletedAsync(search, cancellationToken));
     }
 }
 
@@ -217,6 +231,13 @@ public sealed class VacanciesController(IVacancyService vacancyService) : Contro
         await vacancyService.RestoreAsync(id, User.GetUserId(), cancellationToken);
         return NoContent();
     }
+
+    [Authorize(Roles = "Admin")]
+    [HttpGet("deleted")]
+    public async Task<ActionResult<IReadOnlyList<VacancyDto>>> ListDeleted([FromQuery] string? search, CancellationToken cancellationToken)
+    {
+        return Ok(await vacancyService.ListDeletedAsync(search, cancellationToken));
+    }
 }
 
 [ApiController]
@@ -284,6 +305,13 @@ public sealed class CompetenciesController(ICompetencyService competencyService)
     {
         await competencyService.RestoreAsync(id, User.GetUserId(), cancellationToken);
         return NoContent();
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpGet("deleted")]
+    public async Task<ActionResult<IReadOnlyList<CompetencyDto>>> ListDeleted([FromQuery] string? search, CancellationToken cancellationToken)
+    {
+        return Ok(await competencyService.ListDeletedAsync(search, cancellationToken));
     }
 }
 
@@ -357,6 +385,29 @@ public sealed class InterviewsController(IInterviewService interviewService) : C
     public async Task<ActionResult<InterviewDto>> Decide(Guid id, DecideInterviewRequest request, CancellationToken cancellationToken)
     {
         return Ok(await interviewService.DecideAsync(id, request, User.GetUserId(), cancellationToken));
+    }
+
+    [Authorize(Roles = "Admin,HR")]
+    [HttpPost("{id:guid}/delete")]
+    public async Task<IActionResult> Delete(Guid id, [FromBody] DeleteRequest? request, CancellationToken cancellationToken)
+    {
+        await interviewService.DeleteAsync(id, request?.Reason, User.GetUserId(), cancellationToken);
+        return NoContent();
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpPost("{id:guid}/restore")]
+    public async Task<IActionResult> Restore(Guid id, CancellationToken cancellationToken)
+    {
+        await interviewService.RestoreAsync(id, User.GetUserId(), cancellationToken);
+        return NoContent();
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpGet("deleted")]
+    public async Task<ActionResult<IReadOnlyList<InterviewDto>>> ListDeleted([FromQuery] string? search, CancellationToken cancellationToken)
+    {
+        return Ok(await interviewService.ListDeletedAsync(search, cancellationToken));
     }
 }
 

@@ -38,7 +38,7 @@ public sealed class AuthService(
     public Task<AuthResponse> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default)
     {
         var login = request.Email.Trim().ToLowerInvariant();
-        var users = unitOfWork.Users.Query().Where(x => x.IsActive).ToList();
+        var users = unitOfWork.Users.Query().Where(x => x.IsActive && !x.IsDeleted).ToList();
         var user = users.FirstOrDefault(x =>
             x.Login.ToLower() == login
             || x.Email.ToLower() == login
@@ -152,6 +152,12 @@ public sealed class AuthService(
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
+    public Task<IReadOnlyList<UserDto>> ListDeletedUsersAsync(CancellationToken cancellationToken = default)
+    {
+        var users = unitOfWork.Users.Query().Where(x => x.IsDeleted).OrderBy(x => x.FullName).ToList();
+        return Task.FromResult<IReadOnlyList<UserDto>>(users.Select(Map).ToList());
+    }
+
     private static string NormalizeEmail(string email) => email.Trim().ToLowerInvariant();
 
     private static UserDto Map(User user) => new(
@@ -217,6 +223,7 @@ public sealed class CandidateService(IUnitOfWork unitOfWork, IAuditService audit
             Education = request.Education.Trim(),
             PreviousJob = request.PreviousJob.Trim(),
             Skills = request.Skills.Trim(),
+            Experience = request.Experience?.Trim() ?? string.Empty,
             CreatedById = createdById
         };
 
@@ -242,6 +249,7 @@ public sealed class CandidateService(IUnitOfWork unitOfWork, IAuditService audit
         candidate.Education = request.Education.Trim();
         candidate.PreviousJob = request.PreviousJob.Trim();
         candidate.Skills = request.Skills.Trim();
+        candidate.Experience = request.Experience?.Trim() ?? string.Empty;
         candidate.IsArchived = request.IsArchived;
 
         unitOfWork.Candidates.Update(candidate);
@@ -320,6 +328,27 @@ public sealed class CandidateService(IUnitOfWork unitOfWork, IAuditService audit
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
+    public Task<IReadOnlyList<CandidateDto>> ListDeletedAsync(string? search, CancellationToken cancellationToken = default)
+    {
+        var query = unitOfWork.Candidates.Query().Where(x => x.IsDeleted);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLowerInvariant();
+            query = query.Where(x =>
+                x.FullName.ToLower().Contains(term)
+                || x.Phone.ToLower().Contains(term));
+        }
+
+        var items = query
+            .OrderByDescending(x => x.DeletedAt)
+            .Take(200)
+            .Select(x => Map(x))
+            .ToList();
+
+        return Task.FromResult<IReadOnlyList<CandidateDto>>(items);
+    }
+
     private static CandidateDto Map(Candidate candidate) => new(
         candidate.Id,
         candidate.FullName,
@@ -330,7 +359,11 @@ public sealed class CandidateService(IUnitOfWork unitOfWork, IAuditService audit
         candidate.Education,
         candidate.PreviousJob,
         candidate.Skills,
+        candidate.Experience,
         candidate.IsArchived,
+        candidate.IsDeleted,
+        candidate.DeletedAt,
+        candidate.DeletedReason,
         candidate.CreatedById,
         candidate.CreatedAt);
 }
@@ -521,6 +554,19 @@ public sealed class VacancyService(IUnitOfWork unitOfWork, IAuditService auditSe
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
+    public Task<IReadOnlyList<VacancyDto>> ListDeletedAsync(string? search, CancellationToken cancellationToken = default)
+    {
+        var query = unitOfWork.Vacancies.Query().Where(x => x.IsDeleted);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLowerInvariant();
+            query = query.Where(x => x.Title.ToLower().Contains(term));
+        }
+        var items = query.OrderByDescending(x => x.CreatedAt).Take(200).ToList();
+        var allLinks = unitOfWork.VacancyCompetencies.Query().ToList();
+        return Task.FromResult<IReadOnlyList<VacancyDto>>(items.Select(x => Map(x, allLinks)).ToList());
+    }
+
     private static VacancyDto Map(Vacancy vacancy, List<VacancyCompetency>? links = null)
     {
         var competencyIds = links?.Where(vc => vc.VacancyId == vacancy.Id).Select(vc => vc.CompetencyId).ToList()
@@ -534,7 +580,9 @@ public sealed class VacancyService(IUnitOfWork unitOfWork, IAuditService auditSe
             vacancy.CreatedAt,
             competencyIds,
             vacancy.IsArchived,
-            vacancy.IsDeleted);
+            vacancy.IsDeleted,
+            vacancy.DeletedAt,
+            vacancy.DeletedReason);
     }
 }
 
@@ -681,6 +729,18 @@ public sealed class CompetencyService(IUnitOfWork unitOfWork, IAuditService audi
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
+    public Task<IReadOnlyList<CompetencyDto>> ListDeletedAsync(string? search, CancellationToken cancellationToken = default)
+    {
+        var query = unitOfWork.Competencies.Query().Where(x => x.IsDeleted);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLowerInvariant();
+            query = query.Where(x => x.Name.ToLower().Contains(term));
+        }
+        var items = query.OrderByDescending(x => x.Name).Take(200).ToList();
+        return Task.FromResult<IReadOnlyList<CompetencyDto>>(items.Select(Map).ToList());
+    }
+
     private static void EnsureValidScore(int maxScore)
     {
         if (maxScore <= 0 || maxScore > 5)
@@ -697,7 +757,9 @@ public sealed class CompetencyService(IUnitOfWork unitOfWork, IAuditService audi
         competency.MaxScore,
         competency.IsActive,
         competency.IsArchived,
-        competency.IsDeleted);
+        competency.IsDeleted,
+        competency.DeletedAt,
+        competency.DeletedReason);
 }
 
 public sealed class InterviewService(IUnitOfWork unitOfWork, IAuditService auditService) : IInterviewService
@@ -709,7 +771,7 @@ public sealed class InterviewService(IUnitOfWork unitOfWork, IAuditService audit
         string? search,
         CancellationToken cancellationToken = default)
     {
-        var query = unitOfWork.Interviews.Query();
+        var query = unitOfWork.Interviews.Query().Where(x => !x.IsDeleted);
 
         if (candidateId.HasValue)
         {
@@ -940,6 +1002,9 @@ public sealed class InterviewService(IUnitOfWork unitOfWork, IAuditService audit
         x.Comments,
         x.CreatedAt,
         x.IsArchived,
+        x.IsDeleted,
+        x.DeletedAt,
+        x.DeletedReason,
         x.Matrices
             .OrderBy(m => m.Competency == null ? string.Empty : m.Competency.Category)
             .ThenBy(m => m.Competency == null ? string.Empty : m.Competency.Name)
@@ -954,6 +1019,83 @@ public sealed class InterviewService(IUnitOfWork unitOfWork, IAuditService audit
                 m.EvaluatedById,
                 m.EvaluatedAt))
             .ToList()));
+
+    public async Task DeleteAsync(Guid id, string? reason, Guid? performedById, CancellationToken cancellationToken = default)
+    {
+        var interview = await unitOfWork.Interviews.GetByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException("Собеседование не найдено.");
+        if (interview.IsDeleted) throw new BusinessException("Собеседование уже удалено.");
+
+        interview.IsDeleted = true;
+        interview.DeletedAt = DateTime.UtcNow;
+        interview.DeletedById = performedById;
+        interview.DeletedReason = reason;
+
+        unitOfWork.Interviews.Update(interview);
+        await auditService.LogAsync("Interview", id, "Delete", null, new { interview.IsDeleted }, performedById, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task RestoreAsync(Guid id, Guid? performedById, CancellationToken cancellationToken = default)
+    {
+        var interview = await unitOfWork.Interviews.GetByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException("Собеседование не найдено.");
+        if (!interview.IsDeleted) throw new BusinessException("Собеседование не удалено.");
+
+        interview.IsDeleted = false;
+        interview.DeletedAt = null;
+        interview.DeletedById = null;
+        interview.DeletedReason = null;
+
+        unitOfWork.Interviews.Update(interview);
+        await auditService.LogAsync("Interview", id, "Restore", new { interview.IsDeleted }, null, performedById, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    public Task<IReadOnlyList<InterviewDto>> ListDeletedAsync(string? search, CancellationToken cancellationToken = default)
+    {
+        var allInterviews = unitOfWork.Interviews.Query().Where(x => x.IsDeleted).ToList();
+        var allCandidates = unitOfWork.Candidates.Query().ToList();
+        var allVacancies = unitOfWork.Vacancies.Query().ToList();
+        var allUsers = unitOfWork.Users.Query().ToList();
+        var allMatrices = unitOfWork.CompetencyMatrices.Query().ToList();
+        var allCompetencies = unitOfWork.Competencies.Query().ToList();
+
+        IEnumerable<Interview> filtered = allInterviews;
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLowerInvariant();
+            filtered = filtered.Where(x =>
+                allCandidates.FirstOrDefault(c => c.Id == x.CandidateId)?.FullName.ToLower().Contains(term) == true
+                || allVacancies.FirstOrDefault(v => v.Id == x.VacancyId)?.Title.ToLower().Contains(term) == true);
+        }
+
+        var items = filtered.OrderByDescending(x => x.DeletedAt).Take(200).ToList();
+
+        var dtos = items.Select(x => {
+            var candidate = allCandidates.FirstOrDefault(c => c.Id == x.CandidateId);
+            var vacancy = allVacancies.FirstOrDefault(v => v.Id == x.VacancyId);
+            var interviewer = allUsers.FirstOrDefault(u => u.Id == x.InterviewerId);
+            var matrices = allMatrices.Where(m => m.InterviewId == x.Id)
+                .OrderBy(m => allCompetencies.FirstOrDefault(c => c.Id == m.CompetencyId)?.Category ?? "")
+                .ThenBy(m => allCompetencies.FirstOrDefault(c => c.Id == m.CompetencyId)?.Name ?? "")
+                .Select(m => {
+                    var comp = allCompetencies.FirstOrDefault(c => c.Id == m.CompetencyId);
+                    return new MatrixItemDto(m.Id, m.CompetencyId,
+                        comp?.Name ?? "", comp?.Category ?? "", comp?.MaxScore ?? 0,
+                        m.Score, m.Comment, m.EvaluatedById, m.EvaluatedAt);
+                }).ToList();
+
+            return new InterviewDto(
+                x.Id, x.CandidateId, candidate?.FullName ?? "",
+                x.VacancyId, vacancy?.Title ?? "",
+                x.InterviewerId, interviewer?.FullName ?? "",
+                x.PlannedDate, x.Status, x.Decision, x.Comments, x.CreatedAt, x.IsArchived,
+                x.IsDeleted, x.DeletedAt, x.DeletedReason, matrices);
+        }).ToList();
+
+        return Task.FromResult<IReadOnlyList<InterviewDto>>(dtos);
+    }
 
     public async Task<InterviewDto> ArchiveAsync(Guid id, Guid? performedById, CancellationToken cancellationToken = default)
     {
