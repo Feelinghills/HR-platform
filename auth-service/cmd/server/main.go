@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/rs/cors"
 
@@ -30,6 +31,35 @@ func main() {
 	userRepo := repository.NewUserRepository(pool)
 	jwtMgr := token.NewJWTManager(cfg.JWTSecret, cfg.JWTIssuer, cfg.JWTAudience, cfg.JWTExpiry, cfg.RefreshExpiry)
 	authSvc := service.NewAuthService(userRepo, jwtMgr)
+
+	// Seed default users if none exist
+	seedUsers := []struct{ Login, Email, Password, FullName, Role string }{
+		{"admin", "admin@example.com", "Admin123!", "Администратор", "Admin"},
+		{"hr", "hr@example.com", "Hr123!", "HR менеджер", "HR"},
+		{"reshala", "reshala@example.com", "Decision123!", "Решала", "DecisionMaker"},
+	}
+	// Wait for tables to be created by EF Core migrations
+	for attempt := 0; attempt < 10; attempt++ {
+		existing, err := authSvc.ListUsers(ctx)
+		if err != nil {
+			log.Printf("waiting for database (attempt %d): %v", attempt+1, err)
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		if len(existing) == 0 {
+			for _, u := range seedUsers {
+				_, err := authSvc.Register(ctx, u.Login, u.Email, u.Password, u.FullName, u.Role, "")
+				if err != nil {
+					log.Printf("seed user %s: %v", u.Login, err)
+				} else {
+					log.Printf("seed user created: %s", u.Login)
+				}
+			}
+		} else {
+			log.Printf("database already has %d users, skipping seed", len(existing))
+		}
+		break
+	}
 
 	// --- REST HTTP server ---
 	mux := http.NewServeMux()
