@@ -32,13 +32,6 @@ RUN echo 'server { \
         proxy_set_header X-Real-IP $remote_addr; \
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; \
     } \
-    location /api/users { \
-        proxy_pass http://auth-service:50051; \
-        proxy_http_version 1.1; \
-        proxy_set_header Host $host; \
-        proxy_set_header X-Real-IP $remote_addr; \
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; \
-    } \
     location /api { \
         proxy_pass http://backend:5126; \
         proxy_http_version 1.1; \

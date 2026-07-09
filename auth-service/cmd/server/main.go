@@ -100,8 +100,20 @@ func main() {
 		})
 	})
 
-	// Deleted users endpoint (internal, no auth)
-	mux.HandleFunc("/api/users/deleted", func(w http.ResponseWriter, r *http.Request) {
+	// Internal key check helper
+	requireInternalKey := func(next http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			key := r.Header.Get("X-Internal-Key")
+			if key != cfg.InternalKey {
+				http.Error(w, "unauthorized: invalid internal key", http.StatusUnauthorized)
+				return
+			}
+			next(w, r)
+		}
+	}
+
+	// Deleted users endpoint (internal, requires key)
+	mux.HandleFunc("/api/users/deleted", requireInternalKey(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -113,12 +125,10 @@ func main() {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(users)
-	})
+	}))
 
-	// Users REST endpoints
-	mux.HandleFunc("/api/users", func(w http.ResponseWriter, r *http.Request) {
-		// Internal service-to-service calls don't require user auth
-		// Authorization is handled by the .NET backend proxy
+	// Users REST endpoints (internal, requires key)
+	mux.HandleFunc("/api/users", requireInternalKey(func(w http.ResponseWriter, r *http.Request) {
 
 		switch r.Method {
 		case http.MethodGet:
@@ -155,14 +165,9 @@ func main() {
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
-	})
+	}))
 
-	mux.HandleFunc("/api/users/", func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
+	mux.HandleFunc("/api/users/", requireInternalKey(func(w http.ResponseWriter, r *http.Request) {
 
 		path := strings.TrimPrefix(r.URL.Path, "/api/users/")
 		parts := strings.Split(path, "/")
@@ -247,12 +252,12 @@ func main() {
 		}
 
 		http.Error(w, "not found", http.StatusNotFound)
-	})
+	}))
 
 	handler := cors.New(cors.Options{
-		AllowedOrigins:   []string{"*"},
+		AllowedOrigins:   []string{"http://localhost", "http://localhost:3000", "http://localhost:80"},
 		AllowedMethods:   []string{"GET", "POST", "PATCH", "OPTIONS"},
-		AllowedHeaders:   []string{"*"},
+		AllowedHeaders:   []string{"Authorization", "Content-Type", "X-Internal-Key"},
 		AllowCredentials: true,
 	}).Handler(mux)
 

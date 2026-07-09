@@ -13,6 +13,7 @@ type Config struct {
 	JWTAudience   string
 	JWTExpiry     time.Duration
 	RefreshExpiry time.Duration
+	InternalKey   string
 }
 
 func Load() *Config {
@@ -24,6 +25,7 @@ func Load() *Config {
 		JWTAudience:   getEnv("JWT_AUDIENCE", "InterviewPlatform"),
 		JWTExpiry:     getDurationEnv("JWT_EXPIRY", 120*time.Minute),
 		RefreshExpiry: getDurationEnv("REFRESH_EXPIRY", 7*24*time.Hour),
+		InternalKey:   getEnv("INTERNAL_API_KEY", "hr-platform-internal-2026"),
 	}
 }
 

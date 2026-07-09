@@ -132,5 +132,10 @@ static JwtOptions ReadJwtOptions(IConfiguration configuration)
         throw new InvalidOperationException("JWT secret must contain at least 32 bytes.");
     }
 
+    if (options.Secret == "ChangeMeToASecretWithAtLeast32Characters")
+    {
+        throw new InvalidOperationException("JWT secret must be changed from the default value. Set JWT__Secret in environment variables.");
+    }
+
     return options;
 }

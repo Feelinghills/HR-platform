@@ -38,11 +38,13 @@ public sealed class AuthService(
     public Task<AuthResponse> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default)
     {
         var login = request.Email.Trim().ToLowerInvariant();
-        var users = unitOfWork.Users.Query().Where(x => x.IsActive && !x.IsDeleted).ToList();
-        var user = users.FirstOrDefault(x =>
-            x.Login.ToLower() == login
-            || x.Email.ToLower() == login
-            || x.FullName.ToLower() == login);
+        var user = unitOfWork.Users.Query()
+            .Where(x => x.IsActive && !x.IsDeleted)
+            .ToList()
+            .FirstOrDefault(x =>
+                x.Login.ToLower() == login
+                || x.Email.ToLower() == login
+                || x.FullName.ToLower() == login);
 
         if (user is null || !passwordHasher.Verify(request.Password, user.PasswordHash))
         {
@@ -385,7 +387,9 @@ public sealed class VacancyService(IUnitOfWork unitOfWork, IAuditService auditSe
         }
 
         var vacancyList = query.OrderBy(x => x.Title).ToList();
-        var allLinks = unitOfWork.VacancyCompetencies.Query().ToList();
+        var vacancyIds = vacancyList.Select(x => x.Id).ToList();
+        var allLinks = unitOfWork.VacancyCompetencies.Query()
+            .Where(vc => vacancyIds.Contains(vc.VacancyId)).ToList();
         var vacancies = vacancyList.Select(x => Map(x, allLinks)).ToList();
 
         return Task.FromResult<IReadOnlyList<VacancyDto>>(vacancies);
@@ -563,7 +567,9 @@ public sealed class VacancyService(IUnitOfWork unitOfWork, IAuditService auditSe
             query = query.Where(x => x.Title.ToLower().Contains(term));
         }
         var items = query.OrderByDescending(x => x.CreatedAt).Take(200).ToList();
-        var allLinks = unitOfWork.VacancyCompetencies.Query().ToList();
+        var itemIds = items.Select(x => x.Id).ToList();
+        var allLinks = unitOfWork.VacancyCompetencies.Query()
+            .Where(vc => itemIds.Contains(vc.VacancyId)).ToList();
         return Task.FromResult<IReadOnlyList<VacancyDto>>(items.Select(x => Map(x, allLinks)).ToList());
     }
 

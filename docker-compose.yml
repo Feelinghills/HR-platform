@@ -31,6 +31,7 @@ services:
       - SERVER_PORT=50051
       - POSTGRES_DSN=postgres://postgres:postgres@postgres:5432/interview_platform
       - JWT_SECRET=InterviewPlatformPracticeSecret_ChangeForProduction_2026
+      - INTERNAL_API_KEY=hr-platform-internal-2026
       - JWT_ISSUER=InterviewPlatform
       - JWT_AUDIENCE=InterviewPlatform
       - JWT_EXPIRY=120m
@@ -52,6 +53,7 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=interview_platform;Username=postgres;Password=postgres
       - RestAuth__BaseUrl=http://auth-service:50051/api
+      - RestAuth__InternalKey=hr-platform-internal-2026
     depends_on:
       postgres:
         condition: service_healthy
