@@ -311,10 +311,10 @@ public sealed class QuestPdfService : IPdfService
             container.Page(page =>
             {
                 page.Size(PageSizes.A4);
-                page.MarginLeft(57);
-                page.MarginRight(57);
-                page.MarginTop(40);
-                page.MarginBottom(40);
+                page.MarginLeft(PdfStyles.MarginLeft);
+                page.MarginRight(PdfStyles.MarginRight);
+                page.MarginTop(PdfStyles.MarginTop);
+                page.MarginBottom(PdfStyles.MarginBottom);
                 page.DefaultTextStyle(x => x.FontFamily("Times New Roman").FontSize(12));
 
                 page.Header().Column(column =>
