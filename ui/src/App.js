@@ -53,7 +53,6 @@ function App() {
   const [vacancyFormData, setVacancyFormData] = useState({
     title: '',
     description: '',
-    shortDescription: '',
     requirements: '',
     requiredSkills: [],
     status: 'Активна'
@@ -189,7 +188,6 @@ function App() {
     setVacancyFormData({
       title: '',
       description: '',
-      shortDescription: '',
       requirements: '',
       requiredSkills: [],
       status: 'Активна'
@@ -202,7 +200,6 @@ function App() {
     setVacancyFormData({
       title: vacancy.title,
       description: vacancy.description,
-      shortDescription: vacancy.shortDescription,
       requirements: vacancy.requirements,
       requiredSkills: [...vacancy.requiredSkills],
       status: vacancy.status
@@ -212,6 +209,18 @@ function App() {
 
   const handleSaveVacancy = async (e) => {
     e.preventDefault();
+    if (!vacancyFormData.title.trim()) {
+      alert('Заполните название вакансии');
+      return;
+    }
+    if (!vacancyFormData.description.trim()) {
+      alert('Заполните описание');
+      return;
+    }
+    if (!vacancyFormData.requiredSkills || vacancyFormData.requiredSkills.length === 0) {
+      alert('Выберите хотя бы одну компетенцию');
+      return;
+    }
     const apiData = mapVacancyToApi(vacancyFormData);
 
     try {
@@ -225,7 +234,7 @@ function App() {
         setVacanciesList([mapVacancyFromApi(created), ...vacanciesList]);
       }
       setShowVacancyModal(false);
-      setVacancyFormData({ title: '', description: '', shortDescription: '', requirements: '', requiredSkills: [], status: 'Активна' });
+      setVacancyFormData({ title: '', description: '', requirements: '', requiredSkills: [], status: 'Активна' });
     } catch (err) {
       alert('Ошибка: ' + err.message);
     }
@@ -267,7 +276,7 @@ function App() {
     if (searchQueryVacancies) {
       filtered = filtered.filter(v =>
         v.title.toLowerCase().includes(searchQueryVacancies.toLowerCase()) ||
-        v.shortDescription.toLowerCase().includes(searchQueryVacancies.toLowerCase())
+        v.description.toLowerCase().includes(searchQueryVacancies.toLowerCase())
       );
     }
     if (!showArchivedVacancies) {
@@ -480,13 +489,13 @@ function App() {
   const handleArchiveCompetency = async (id) => {
     const comp = competencies.find(c => c.id === id);
     try {
-      if (comp.isActive) {
-        await api.archiveCompetency(id);
-      } else {
+      if (comp.isArchived) {
         await api.unarchiveCompetency(id);
+      } else {
+        await api.archiveCompetency(id);
       }
       setCompetencies(competencies.map(c =>
-        c.id === id ? { ...c, isActive: !c.isActive } : c
+        c.id === id ? { ...c, isArchived: !c.isArchived } : c
       ));
     } catch (err) {
       alert('Ошибка: ' + err.message);
@@ -505,7 +514,7 @@ function App() {
       filtered = filtered.filter(c => c.category === categoryFilter);
     }
     if (!showArchivedCompetencies) {
-      filtered = filtered.filter(c => c.isActive);
+      filtered = filtered.filter(c => !c.isArchived);
     }
     return filtered;
   };
@@ -822,7 +831,7 @@ function App() {
       setVacanciesList((vacanciesRes || []).map(mapVacancyFromApi));
       setCompetencies((competenciesRes || []).map(c => ({
         id: c.id, name: c.name, category: c.category,
-        description: c.description, maxScore: c.maxScore, isActive: c.isActive
+        description: c.description, maxScore: c.maxScore, isActive: c.isActive, isArchived: c.isArchived
       })));
       const cats = [...new Set((competenciesRes || []).map(c => c.category))];
       setCategories(cats);
@@ -1148,19 +1157,15 @@ function App() {
               <input type="text" value={vacancyFormData.title} onChange={(e) => setVacancyFormData({ ...vacancyFormData, title: e.target.value })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} required />
             </div>
             <div style={{ marginBottom: '14px' }}>
-              <label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Краткое описание *</label>
-              <input type="text" value={vacancyFormData.shortDescription} onChange={(e) => setVacancyFormData({ ...vacancyFormData, shortDescription: e.target.value })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} required />
-            </div>
-            <div style={{ marginBottom: '14px' }}>
-              <label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Полное описание</label>
-              <textarea value={vacancyFormData.description} onChange={(e) => setVacancyFormData({ ...vacancyFormData, description: e.target.value })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box', minHeight: '80px', resize: 'vertical' }} />
+              <label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Описание *</label>
+              <textarea value={vacancyFormData.description} onChange={(e) => setVacancyFormData({ ...vacancyFormData, description: e.target.value })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box', minHeight: '80px', resize: 'vertical' }} required />
             </div>
             <div style={{ marginBottom: '14px' }}>
               <label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Требования</label>
               <textarea value={vacancyFormData.requirements} onChange={(e) => setVacancyFormData({ ...vacancyFormData, requirements: e.target.value })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box', minHeight: '80px', resize: 'vertical' }} />
             </div>
             <div style={{ marginBottom: '14px' }}>
-              <label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Необходимые компетенции</label>
+              <label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Необходимые компетенции *</label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', padding: '8px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', minHeight: '40px' }}>
                 {availableSkills.map((comp) => (
                   <button
@@ -1475,8 +1480,8 @@ function App() {
                     </td>
                     <td style={{ padding: '12px 16px', color: '#ffffff', fontSize: '14px', textAlign: 'center' }}>{comp.maxScore}</td>
                     <td style={{ padding: '12px 16px', color: '#ffffff', fontSize: '14px', textAlign: 'center' }}>
-                      <span style={{ padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '600', display: 'inline-block', background: comp.isActive ? '#3E503A' : '#4E1717', color: '#ffffff' }}>
-                        {comp.isActive ? 'Активен' : 'Архивирован'}
+                      <span style={{ padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '600', display: 'inline-block', background: comp.isArchived ? '#4E1717' : '#3E503A', color: '#ffffff' }}>
+                        {comp.isArchived ? 'Архивирован' : 'Активен'}
                       </span>
                     </td>
                     <td style={{ padding: '12px 16px', color: '#ffffff', fontSize: '14px', textAlign: 'center' }}>
@@ -1556,15 +1561,9 @@ function App() {
                 </div>
                 <div style={{ marginBottom: '14px' }}>
                   <label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Максимальный балл *</label>
-                  <input type="number" min="1" max="10" value={competencyFormData.maxScore} onChange={(e) => setCompetencyFormData({ ...competencyFormData, maxScore: Number(e.target.value) })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} required />
+                  <input type="number" min="1" max="5" value={competencyFormData.maxScore} onChange={(e) => setCompetencyFormData({ ...competencyFormData, maxScore: Number(e.target.value) })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} required />
                 </div>
-                <div style={{ marginBottom: '20px' }}>
-                  <label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Статус</label>
-                  <select value={competencyFormData.isActive ? 'active' : 'archived'} onChange={(e) => setCompetencyFormData({ ...competencyFormData, isActive: e.target.value === 'active' })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}>
-                    <option value="active">Активен</option>
-                    <option value="archived">Архивирован</option>
-                  </select>
-                </div>
+
                 <div style={{ display: 'flex', gap: '12px' }}>
                   <button type="button" onClick={() => setShowCompetencyModal(false)} style={{ flex: 1, padding: '10px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Отмена</button>
                   <button type="submit" style={{ flex: 1, padding: '10px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>{editingCompetencyId ? 'Сохранить' : 'Добавить'}</button>
@@ -1619,7 +1618,7 @@ function App() {
                       {vacancy.status}
                     </span>
                   </div>
-                  <p style={{ fontSize: '14px', color: '#6A7787', marginTop: '4px' }}>{vacancy.shortDescription}</p>
+                  <p style={{ fontSize: '14px', color: '#6A7787', marginTop: '4px' }}>{vacancy.description}</p>
                 </div>
                 <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
                   {!vacancy.isArchived && hasPermission('vacancies.edit') && <button onClick={() => openEditVacancyModal(vacancy)} style={{ padding: '4px 12px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Редактировать</button>}

@@ -237,7 +237,6 @@ export function mapVacancyFromApi(dto) {
     id: dto.id,
     title: dto.title,
     description: dto.description,
-    shortDescription: dto.description,
     requirements: dto.requirements,
     requiredSkills: dto.competencyIds || [],
     status: dto.isArchived ? 'Закрыта' : (dto.isActive ? 'Активна' : 'Закрыта'),
@@ -250,8 +249,8 @@ export function mapVacancyFromApi(dto) {
 export function mapVacancyToApi(data) {
   return {
     title: data.title,
-    description: data.description,
-    requirements: data.requirements,
+    description: data.description || '',
+    requirements: data.requirements || '',
     isActive: data.status !== 'Закрыта',
     competencyIds: data.requiredSkills || [],
   };
