@@ -55,7 +55,6 @@ function App() {
   const [vacancyFormData, setVacancyFormData] = useState({
     title: '',
     description: '',
-    shortDescription: '',
     requirements: '',
     requiredSkills: [],
     status: 'Активна'
@@ -197,7 +196,6 @@ function App() {
     setVacancyFormData({
       title: '',
       description: '',
-      shortDescription: '',
       requirements: '',
       requiredSkills: [],
       status: 'Активна'
@@ -210,7 +208,6 @@ function App() {
     setVacancyFormData({
       title: vacancy.title,
       description: vacancy.description,
-      shortDescription: vacancy.shortDescription,
       requirements: vacancy.requirements,
       requiredSkills: [...vacancy.requiredSkills],
       status: vacancy.status
@@ -220,6 +217,18 @@ function App() {
 
   const handleSaveVacancy = async (e) => {
     e.preventDefault();
+    if (!vacancyFormData.title.trim()) {
+      alert('Заполните название вакансии');
+      return;
+    }
+    if (!vacancyFormData.description.trim()) {
+      alert('Заполните описание');
+      return;
+    }
+    if (!vacancyFormData.requiredSkills || vacancyFormData.requiredSkills.length === 0) {
+      alert('Выберите хотя бы одну компетенцию');
+      return;
+    }
     const apiData = mapVacancyToApi(vacancyFormData);
 
     try {
@@ -233,7 +242,7 @@ function App() {
         setVacanciesList([mapVacancyFromApi(created), ...vacanciesList]);
       }
       setShowVacancyModal(false);
-      setVacancyFormData({ title: '', description: '', shortDescription: '', requirements: '', requiredSkills: [], status: 'Активна' });
+      setVacancyFormData({ title: '', description: '', requirements: '', requiredSkills: [], status: 'Активна' });
     } catch (err) {
       alert('Ошибка: ' + err.message);
     }
@@ -275,7 +284,7 @@ function App() {
     if (searchQueryVacancies) {
       filtered = filtered.filter(v =>
         v.title.toLowerCase().includes(searchQueryVacancies.toLowerCase()) ||
-        v.shortDescription.toLowerCase().includes(searchQueryVacancies.toLowerCase())
+        v.description.toLowerCase().includes(searchQueryVacancies.toLowerCase())
       );
     }
     if (!showArchivedVacancies) {
@@ -500,13 +509,13 @@ function App() {
   const handleArchiveCompetency = async (id) => {
     const comp = competencies.find(c => c.id === id);
     try {
-      if (comp.isActive) {
-        await api.archiveCompetency(id);
-      } else {
+      if (comp.isArchived) {
         await api.unarchiveCompetency(id);
+      } else {
+        await api.archiveCompetency(id);
       }
       setCompetencies(competencies.map(c =>
-        c.id === id ? { ...c, isActive: !c.isActive } : c
+        c.id === id ? { ...c, isArchived: !c.isArchived } : c
       ));
     } catch (err) {
       alert('Ошибка: ' + err.message);
@@ -526,7 +535,7 @@ function App() {
       filtered = filtered.filter(c => catArr.includes(c.category));
     }
     if (!showArchivedCompetencies) {
-      filtered = filtered.filter(c => c.isActive);
+      filtered = filtered.filter(c => !c.isArchived);
     }
     switch (competencySortOption) {
       case 'oldest': filtered.sort((a, b) => a.name.localeCompare(b.name)); break;
@@ -750,6 +759,12 @@ function App() {
     try {
       let updated;
       if (decision === 'Ожидает') {
+        const interview = interviews.find(i => i.id === interviewId);
+        const matrix = interview?.matrix || [];
+        if (matrix.length > 0 && matrix.some(m => !m.score || m.score === 0)) {
+          alert('Не все оценки компетенций проставлены. Завершить собеседование можно только после заполнения всех оценок.');
+          return;
+        }
         updated = await api.updateInterviewStatus(interviewId, { status: 'Completed', comments: interviewComments || selectedInterview?.comments || '' });
       } else if (decision === 'Без решения') {
         updated = await api.updateInterviewStatus(interviewId, { status: 'Cancelled', comments: interviewComments || selectedInterview?.comments || '', decision: 'Pending' });
@@ -907,7 +922,45 @@ function App() {
   };
 
 
-  const pdfGenerate = (type, interview) => generatePDF(type, interview, candidates);
+  const generatePDF = async (type, interview) => {
+    try {
+      let response;
+      let filename;
+      switch(type) {
+        case 'Карточка кандидата':
+          response = await api.downloadCandidateCard(interview.candidateId);
+          filename = 'candidate-card.pdf';
+          break;
+        case 'Протокол собеседования':
+          response = await api.downloadInterviewProtocol(interview.id);
+          filename = 'interview-protocol.pdf';
+          break;
+        case 'Письмо о решении':
+          response = await api.downloadDecisionLetter(interview.id);
+          filename = 'decision-letter.pdf';
+          break;
+        default:
+          return;
+      }
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } else {
+        alert('Ошибка при скачивании файла');
+      }
+    } catch (err) {
+      alert('Ошибка: ' + err.message);
+    }
+  };
+
+  const pdfGenerate = (type, interview) => generatePDF(type, interview);
 
   // --- ЗАГРУЗКА ДАННЫХ С БЭКЕНДА ---
   const loadData = useCallback(async () => {
@@ -923,7 +976,7 @@ function App() {
       setVacanciesList((vacanciesRes || []).map(mapVacancyFromApi));
       setCompetencies((competenciesRes || []).map(c => ({
         id: c.id, name: c.name, category: c.category,
-        description: c.description, maxScore: c.maxScore, isActive: c.isActive
+        description: c.description, maxScore: c.maxScore, isActive: c.isActive, isArchived: c.isArchived
       })));
       const cats = [...new Set((competenciesRes || []).map(c => c.category))];
       setCategories(cats);
@@ -1073,7 +1126,7 @@ function App() {
         transition: 'opacity 0.5s ease-out, transform 0.5s ease-out'
       }}>
         <div style={{ textAlign: 'center', animation: 'fadeInUp 0.6s ease-out' }}>
-          <img src="/logo.png" alt="Логотип" style={{ height: '80px', marginBottom: '32px', display: 'block', marginLeft: 'auto', marginRight: 'auto' }} />
+          <img src="/logo.png?v=2" alt="Логотип" style={{ height: '80px', marginBottom: '32px', display: 'block', marginLeft: 'auto', marginRight: 'auto' }} />
           <h1 style={{ fontSize: '36px', fontWeight: '700', color: '#ffffff', textAlign: 'center' }}>Здравствуйте, {userName}!</h1>
         </div>
       </div>
@@ -1086,7 +1139,7 @@ function App() {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', fontFamily: "'Unbounded', sans-serif", animation: 'fadeIn 0.3s ease-out' }}>
         <header style={{ display: 'flex', alignItems: 'center', height: '64px', padding: '0 24px', background: '#11171F', borderBottom: '1px solid #6A7787', position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><img src="/logo.png" alt="Логотип" style={{ height: '32px' }} /><span style={{ fontSize: '14px', fontWeight: '600', color: '#ffffff' }}>HR-platform</span></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><img src="/logo.png?v=2" alt="Логотип" style={{ height: '32px' }} /><span style={{ fontSize: '14px', fontWeight: '600', color: '#ffffff' }}>HR-platform</span></div>
         </header>
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flex: 1, padding: '80px 20px 20px' }}>
           <div style={{ background: '#171D24', padding: '48px 40px', borderRadius: '16px', boxShadow: '0 8px 32px rgba(0,0,0,0.3)', width: '100%', maxWidth: '400px', textAlign: 'center', position: 'relative' }}>
@@ -1110,7 +1163,7 @@ function App() {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', fontFamily: "'Unbounded', sans-serif" }}>
         <header style={{ display: 'flex', alignItems: 'center', height: '64px', padding: '0 24px', background: '#11171F', borderBottom: '1px solid #6A7787', flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><img src="/logo.png" alt="Логотип" style={{ height: '64px' }} /><span style={{ fontSize: '14px', fontWeight: '600', color: '#ffffff' }}>HR-platform</span></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><img src="/logo.png?v=2" alt="Логотип" style={{ height: '64px' }} /><span style={{ fontSize: '14px', fontWeight: '600', color: '#ffffff' }}>HR-platform</span></div>
         </header>
         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', flex: 1, padding: '20px' }}>
           <h1 style={{ fontSize: '58px', fontWeight: '700', color: '#ffffff', textAlign: 'center', marginBottom: '11px' }}>Технические собеседования</h1>
@@ -1290,19 +1343,15 @@ function App() {
               <input type="text" value={vacancyFormData.title} onChange={(e) => setVacancyFormData({ ...vacancyFormData, title: e.target.value })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} required />
             </div>
             <div style={{ marginBottom: '14px' }}>
-              <label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Краткое описание *</label>
-              <input type="text" value={vacancyFormData.shortDescription} onChange={(e) => setVacancyFormData({ ...vacancyFormData, shortDescription: e.target.value })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} required />
-            </div>
-            <div style={{ marginBottom: '14px' }}>
-              <label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Полное описание</label>
-              <textarea value={vacancyFormData.description} onChange={(e) => setVacancyFormData({ ...vacancyFormData, description: e.target.value })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box', minHeight: '80px', resize: 'vertical' }} />
+              <label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Описание *</label>
+              <textarea value={vacancyFormData.description} onChange={(e) => setVacancyFormData({ ...vacancyFormData, description: e.target.value })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box', minHeight: '80px', resize: 'vertical' }} required />
             </div>
             <div style={{ marginBottom: '14px' }}>
               <label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Требования</label>
               <textarea value={vacancyFormData.requirements} onChange={(e) => setVacancyFormData({ ...vacancyFormData, requirements: e.target.value })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box', minHeight: '80px', resize: 'vertical' }} />
             </div>
             <div style={{ marginBottom: '14px' }}>
-              <label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Необходимые компетенции</label>
+              <label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Необходимые компетенции *</label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', padding: '8px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', minHeight: '40px' }}>
                 {availableSkills.map((comp) => (
                   <button
@@ -1357,7 +1406,7 @@ function App() {
       ? matrix.map(m => m.competencyName)
       : ['Навык 1', 'Навык 2', 'Навык 3'];
     const isConcluded = selectedInterview.status === 'Проведено' || selectedInterview.status === 'Отменено';
-    const canEditMatrix = selectedInterview.status === 'Запланировано';
+    const canEditMatrix = selectedInterview.status === 'Запланировано' && hasPermission('matrix.edit');
     const renderStars = (skillIndex) => {
       const rating = matrix[skillIndex]?.score || 0;
       const stars = [];
@@ -1692,8 +1741,8 @@ function App() {
                     </td>
                     <td style={{ padding: '12px 16px', color: '#ffffff', fontSize: '14px', textAlign: 'center' }}>{comp.maxScore}</td>
                     <td style={{ padding: '12px 16px', color: '#ffffff', fontSize: '14px', textAlign: 'center' }}>
-                      <span style={{ padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '600', display: 'inline-block', background: comp.isActive ? '#3E503A' : '#4E1717', color: '#ffffff' }}>
-                        {comp.isActive ? 'Активен' : 'Архивирован'}
+                      <span style={{ padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '600', display: 'inline-block', background: comp.isArchived ? '#4E1717' : '#3E503A', color: '#ffffff' }}>
+                        {comp.isArchived ? 'Архивирован' : 'Активен'}
                       </span>
                     </td>
                     <td style={{ padding: '12px 16px', color: '#ffffff', fontSize: '14px', textAlign: 'center' }}>
@@ -1773,15 +1822,9 @@ function App() {
                 </div>
                 <div style={{ marginBottom: '14px' }}>
                   <label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Максимальный балл *</label>
-                  <input type="number" min="1" max="10" value={competencyFormData.maxScore} onChange={(e) => setCompetencyFormData({ ...competencyFormData, maxScore: Number(e.target.value) })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} required />
+                  <input type="number" min="1" max="5" value={competencyFormData.maxScore} onChange={(e) => setCompetencyFormData({ ...competencyFormData, maxScore: Number(e.target.value) })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} required />
                 </div>
-                <div style={{ marginBottom: '20px' }}>
-                  <label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Статус</label>
-                  <select value={competencyFormData.isActive ? 'active' : 'archived'} onChange={(e) => setCompetencyFormData({ ...competencyFormData, isActive: e.target.value === 'active' })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}>
-                    <option value="active">Активен</option>
-                    <option value="archived">Архивирован</option>
-                  </select>
-                </div>
+
                 <div style={{ display: 'flex', gap: '12px' }}>
                   <button type="button" onClick={() => setShowCompetencyModal(false)} style={{ flex: 1, padding: '10px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Отмена</button>
                   <button type="submit" style={{ flex: 1, padding: '10px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>{editingCompetencyId ? 'Сохранить' : 'Добавить'}</button>
@@ -1844,7 +1887,7 @@ function App() {
                       {vacancy.status}
                     </span>
                   </div>
-                  <p style={{ fontSize: '14px', color: '#6A7787', marginTop: '4px' }}>{vacancy.shortDescription}</p>
+                  <p style={{ fontSize: '14px', color: '#6A7787', marginTop: '4px' }}>{vacancy.description}</p>
                 </div>
                 <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
                   {!vacancy.isArchived && hasPermission('vacancies.edit') && <button onClick={() => openEditVacancyModal(vacancy)} style={{ padding: '4px 12px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Редактировать</button>}
@@ -2469,7 +2512,7 @@ function App() {
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '64px', padding: '0 24px', background: '#11171F', borderBottom: '1px solid #6A7787', position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <button onClick={() => setIsMenuOpen(!isMenuOpen)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', padding: '4px 8px', color: '#ffffff' }}>☰</button>
-          <img src="/logo.png" alt="Логотип" style={{ height: '64px' }} />
+          <img src="/logo.png?v=2" alt="Логотип" style={{ height: '64px' }} />
           <span style={{ fontSize: '14px', fontWeight: '600', color: '#ffffff' }}>HR-platform</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
