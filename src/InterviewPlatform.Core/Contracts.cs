@@ -12,7 +12,7 @@ public sealed record UserDto(Guid Id, string Login, string Email, string FullNam
 
 public sealed record UpdateUserStatusRequest(bool IsActive);
 
-public sealed record UpdateUserRequest(string? FullName, string? Email, UserRole? Role);
+public sealed record UpdateUserRequest(string? Login, string? FullName, string? Email, UserRole? Role);
 
 public sealed record CandidateDto(
     Guid Id,

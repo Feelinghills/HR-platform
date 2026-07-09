@@ -97,6 +97,7 @@ public sealed class RestAuthService : IAuthService
     {
         var msg = CreateRequest(HttpMethod.Put, $"{_options.BaseUrl}/users/{id}", new
         {
+            Login = request.Login,
             FullName = request.FullName,
             Email = request.Email,
             Role = request.Role?.ToString(),
