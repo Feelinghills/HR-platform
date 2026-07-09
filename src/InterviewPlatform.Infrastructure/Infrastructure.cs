@@ -291,36 +291,148 @@ public sealed class JwtTokenService(IOptions<JwtOptions> options) : IJwtTokenSer
 
 public sealed class QuestPdfService : IPdfService
 {
+    private static byte[] LoadLogo()
+    {
+        var assembly = typeof(QuestPdfService).Assembly;
+        using var stream = assembly.GetManifestResourceStream("InterviewPlatform.Infrastructure.Resources.LogoBlack.png");
+        if (stream == null) return [];
+        using var ms = new MemoryStream();
+        stream.CopyTo(ms);
+        return ms.ToArray();
+    }
+
     public Task<byte[]> GenerateAsync(ReportDocument document, CancellationToken cancellationToken = default)
     {
         QuestPDF.Settings.License = LicenseType.Community;
+        var logoBytes = LoadLogo();
 
         var bytes = Document.Create(container =>
         {
             container.Page(page =>
             {
                 page.Size(PageSizes.A4);
-                page.Margin(40);
-                page.DefaultTextStyle(x => x.FontFamily("Arial").FontSize(10));
+                page.MarginLeft(57);
+                page.MarginRight(57);
+                page.MarginTop(40);
+                page.MarginBottom(40);
+                page.DefaultTextStyle(x => x.FontFamily("Times New Roman").FontSize(12));
 
                 page.Header().Column(column =>
                 {
-                    column.Item().Text(document.Title).SemiBold().FontSize(20).FontColor(Colors.Blue.Darken2);
-                    column.Item().Text(document.Subtitle).FontSize(12).FontColor(Colors.Grey.Darken2);
-                    column.Item().PaddingTop(8).LineHorizontal(1).LineColor(Colors.Grey.Lighten1);
+                    column.Item().Row(row =>
+                    {
+                        row.RelativeItem().Width(120).Column(logoCol =>
+                        {
+                            if (logoBytes.Length > 0)
+                                logoCol.Item().Image(logoBytes).FitArea();
+                        });
+                        row.RelativeItem().AlignCenter().AlignMiddle()
+                            .Text(document.Title).SemiBold().FontSize(18);
+                        row.RelativeItem();
+                    });
+                    column.Item().PaddingTop(6).LineHorizontal(1).LineColor(Colors.Black);
                 });
 
                 page.Content().PaddingVertical(16).Column(column =>
                 {
-                    column.Spacing(12);
+                    column.Spacing(8);
+
+                    if (!string.IsNullOrEmpty(document.DocumentNumber) || !string.IsNullOrEmpty(document.DocumentDate))
+                    {
+                        column.Item().AlignRight().Column(r =>
+                        {
+                            if (!string.IsNullOrEmpty(document.DocumentNumber))
+                                r.Item().Text(document.DocumentNumber).FontSize(11);
+                            if (!string.IsNullOrEmpty(document.DocumentDate))
+                                r.Item().Text(document.DocumentDate).FontSize(11);
+                        });
+                    }
+
+                    column.Item().PaddingTop(6).AlignCenter()
+                        .Text(document.Subtitle).SemiBold().FontSize(16);
+
+                    column.Item().PaddingTop(6).LineHorizontal(1).LineColor(Colors.Black);
+                    column.Item().PaddingTop(8);
 
                     foreach (var section in document.Sections)
                     {
-                        column.Item().Text(section.Title).SemiBold().FontSize(13).FontColor(Colors.Grey.Darken3);
+                        var tableLines = section.Lines.Where(l => l.Contains(" | ")).ToList();
+                        var textLines = section.Lines.Where(l => !l.Contains(" | ")).ToList();
+                        var isBoxed = section.Title.StartsWith("[BOX] ");
+                        var sectionTitle = isBoxed ? section.Title.Substring(6) : section.Title;
 
-                        foreach (var line in section.Lines)
+                        if (textLines.Count > 0)
                         {
-                            column.Item().Text(line).FontSize(10);
+                            if (isBoxed)
+                            {
+                                column.Item().PaddingTop(8).Border(0.5f).BorderColor(Colors.Grey.Medium).Padding(12).Column(boxCol =>
+                                {
+                                    boxCol.Item().Text(sectionTitle).SemiBold().FontSize(13);
+                                    foreach (var line in textLines)
+                                    {
+                                        boxCol.Item().PaddingTop(2).Text(line).FontSize(12);
+                                    }
+                                });
+                            }
+                            else
+                            {
+                                column.Item().PaddingTop(8)
+                                    .Text(sectionTitle).SemiBold().FontSize(13);
+                                foreach (var line in textLines)
+                                {
+                                    if (line == "---")
+                                    {
+                                        column.Item().PaddingTop(6).LineHorizontal(0.5f).LineColor(Colors.Black);
+                                    }
+                                    else if (line.StartsWith("___"))
+                                    {
+                                        column.Item().PaddingTop(4).Width(200).LineHorizontal(0.5f).LineColor(Colors.Black);
+                                    }
+                                    else
+                                    {
+                                        column.Item().PaddingTop(2).Text(line).FontSize(12);
+                                    }
+                                }
+                            }
+                        }
+
+                        if (tableLines.Count > 0)
+                        {
+                            if (textLines.Count == 0)
+                            {
+                                column.Item().PaddingTop(8)
+                                    .Text(section.Title).SemiBold().FontSize(13);
+                            }
+
+                            var headers = tableLines[0].Split(" | ");
+                            column.Item().PaddingTop(4).Table(table =>
+                            {
+                                table.ColumnsDefinition(columns =>
+                                {
+                                    for (int i = 0; i < headers.Length; i++)
+                                        columns.RelativeColumn(1);
+                                });
+
+                                table.Header(header =>
+                                {
+                                    foreach (var h in headers)
+                                    {
+                                        header.Cell().Background(Colors.Grey.Lighten3).Border(0.5f)
+                                            .BorderColor(Colors.Grey.Medium).Padding(5)
+                                            .Text(h).SemiBold().FontSize(11);
+                                    }
+                                });
+
+                                for (int row = 1; row < tableLines.Count; row++)
+                                {
+                                    var cells = tableLines[row].Split(" | ");
+                                    foreach (var cell in cells)
+                                    {
+                                        table.Cell().Border(0.5f).BorderColor(Colors.Grey.Medium)
+                                            .Padding(5).Text(cell).FontSize(11);
+                                    }
+                                }
+                            });
                         }
                     }
                 });

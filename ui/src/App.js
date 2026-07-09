@@ -821,7 +821,45 @@ function App() {
   };
 
 
-  const pdfGenerate = (type, interview) => generatePDF(type, interview, candidates);
+  const generatePDF = async (type, interview) => {
+    try {
+      let response;
+      let filename;
+      switch(type) {
+        case 'Карточка кандидата':
+          response = await api.downloadCandidateCard(interview.candidateId);
+          filename = 'candidate-card.pdf';
+          break;
+        case 'Протокол собеседования':
+          response = await api.downloadInterviewProtocol(interview.id);
+          filename = 'interview-protocol.pdf';
+          break;
+        case 'Письмо о решении':
+          response = await api.downloadDecisionLetter(interview.id);
+          filename = 'decision-letter.pdf';
+          break;
+        default:
+          return;
+      }
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } else {
+        alert('Ошибка при скачивании файла');
+      }
+    } catch (err) {
+      alert('Ошибка: ' + err.message);
+    }
+  };
+
+  const pdfGenerate = (type, interview) => generatePDF(type, interview);
 
   // --- ЗАГРУЗКА ДАННЫХ С БЭКЕНДА ---
   const loadData = useCallback(async () => {

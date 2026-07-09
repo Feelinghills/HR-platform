@@ -114,7 +114,12 @@ public sealed record DeleteRequest(string? Reason);
 
 public sealed record ReportSection(string Title, IReadOnlyList<string> Lines);
 
-public sealed record ReportDocument(string Title, string Subtitle, IReadOnlyList<ReportSection> Sections);
+public sealed record ReportDocument(
+    string Title,
+    string Subtitle,
+    string? DocumentNumber,
+    string? DocumentDate,
+    IReadOnlyList<ReportSection> Sections);
 
 public sealed record GeneratedReport(string FileName, byte[] Content);
 
