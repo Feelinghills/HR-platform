@@ -65,6 +65,13 @@ const api = {
       method: 'POST',
       body: JSON.stringify({ reason: reason || null }),
     }),
+  restoreCandidate: (id) =>
+    apiFetch(`/candidates/${id}/restore`, { method: 'POST' }),
+  getDeletedCandidates: (search) => {
+    const params = new URLSearchParams();
+    if (search) params.set('search', search);
+    return apiFetch(`/candidates/deleted?${params}`);
+  },
 
   // Vacancies
   getVacancies: (activeOnly, includeArchived) => {
@@ -86,6 +93,13 @@ const api = {
       method: 'POST',
       body: JSON.stringify({ reason: reason || null }),
     }),
+  restoreVacancy: (id) =>
+    apiFetch(`/vacancies/${id}/restore`, { method: 'POST' }),
+  getDeletedVacancies: (search) => {
+    const params = new URLSearchParams();
+    if (search) params.set('search', search);
+    return apiFetch(`/vacancies/deleted?${params}`);
+  },
 
   // Competencies
   getCompetencies: (activeOnly, includeArchived) => {
@@ -107,6 +121,13 @@ const api = {
       method: 'POST',
       body: JSON.stringify({ reason: reason || null }),
     }),
+  restoreCompetency: (id) =>
+    apiFetch(`/competencies/${id}/restore`, { method: 'POST' }),
+  getDeletedCompetencies: (search) => {
+    const params = new URLSearchParams();
+    if (search) params.set('search', search);
+    return apiFetch(`/competencies/deleted?${params}`);
+  },
 
   // Interviews
   getInterviews: (params = {}) => {
@@ -131,6 +152,15 @@ const api = {
     apiFetch(`/interviews/${id}/archive`, { method: 'POST' }),
   unarchiveInterview: (id) =>
     apiFetch(`/interviews/${id}/unarchive`, { method: 'POST' }),
+  deleteInterview: (id, reason) =>
+    apiFetch(`/interviews/${id}/delete`, { method: 'POST', body: JSON.stringify({ reason: reason || null }) }),
+  restoreInterview: (id) =>
+    apiFetch(`/interviews/${id}/restore`, { method: 'POST' }),
+  getDeletedInterviews: (search) => {
+    const params = new URLSearchParams();
+    if (search) params.set('search', search);
+    return apiFetch(`/interviews/deleted?${params}`);
+  },
 
   // Users (Go auth-service)
   getUsers: () => apiFetch('/users', {}, AUTH_API),
@@ -146,7 +176,9 @@ const api = {
       body: JSON.stringify({ reason: reason || null }),
     }, AUTH_API),
   restoreUser: (id) =>
-    apiFetch(`/users/${id}/restore`, { method: 'POST' }, AUTH_API),
+    apiFetch(`/users/${id}/restore`, { method: 'POST', body: JSON.stringify({ performedById: '' }) }, AUTH_API),
+  getDeletedUsers: () =>
+    apiFetch('/users/deleted'),
 
   // Audit
   getAudit: (entityType, entityId) => {
@@ -211,7 +243,7 @@ export function mapCandidateFromApi(dto) {
     education: dto.education,
     previousJob: dto.previousJob,
     skills: dto.skills ? dto.skills.split(',').map(s => s.trim()).filter(Boolean) : [],
-    experience: '',
+    experience: dto.experience || '',
     ratings: {},
     isArchived: dto.isArchived,
     createdById: dto.createdById,
@@ -228,6 +260,7 @@ export function mapCandidateToApi(data) {
     desiredPosition: data.vacancy,
     education: data.education,
     previousJob: data.previousJob || '',
+    experience: data.experience || '',
     skills: Array.isArray(data.skills) ? data.skills.join(', ') : (data.skills || ''),
   };
 }

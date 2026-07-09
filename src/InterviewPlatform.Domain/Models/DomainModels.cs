@@ -90,6 +90,7 @@ public sealed class Candidate
     public string Education { get; set; } = string.Empty;
     public string PreviousJob { get; set; } = string.Empty;
     public string Skills { get; set; } = string.Empty;
+    public string Experience { get; set; } = string.Empty;
     public Guid? CreatedById { get; set; }
     public User? CreatedBy { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -122,6 +123,11 @@ public sealed class Interview
     public string? Comments { get; set; }
     public bool IsArchived { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public bool IsDeleted { get; set; }
+    public DateTime? DeletedAt { get; set; }
+    public Guid? DeletedById { get; set; }
+    public User? DeletedBy { get; set; }
+    public string? DeletedReason { get; set; }
 
     public ICollection<CompetencyMatrix> Matrices { get; set; } = new List<CompetencyMatrix>();
 }

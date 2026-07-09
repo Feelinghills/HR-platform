@@ -109,6 +109,27 @@ func (r *UserRepository) ListAll(ctx context.Context) ([]*model.User, error) {
 	return users, nil
 }
 
+func (r *UserRepository) ListDeleted(ctx context.Context) ([]*model.User, error) {
+	rows, err := r.db.Query(ctx,
+		`SELECT "Id", "Login", "Email", "FullName", "PasswordHash", "Role", "IsActive", "IsDeleted", "CreatedAt"
+		 FROM users WHERE "IsDeleted" = true ORDER BY "FullName"`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list deleted users: %w", err)
+	}
+	defer rows.Close()
+
+	var users = make([]*model.User, 0)
+	for rows.Next() {
+		u := &model.User{}
+		if err := rows.Scan(&u.ID, &u.Login, &u.Email, &u.FullName, &u.PasswordHash, &u.Role, &u.IsActive, &u.IsDeleted, &u.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan user: %w", err)
+		}
+		users = append(users, u)
+	}
+	return users, nil
+}
+
 func (r *UserRepository) SetStatus(ctx context.Context, id string, isActive bool) error {
 	_, err := r.db.Exec(ctx,
 		`UPDATE users SET "IsActive" = $1 WHERE "Id" = $2`,

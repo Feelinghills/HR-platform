@@ -135,6 +135,12 @@ func (s *AuthService) Login(ctx context.Context, login, password string) (string
 	// Try cache first
 	cacheKey := strings.ToLower(login)
 	if cached := s.cache.Get(cacheKey); cached != nil {
+		if cached.IsDeleted {
+			return "", nil, fmt.Errorf("учётная запись удалена")
+		}
+		if !cached.IsActive {
+			return "", nil, fmt.Errorf("учётная запись деактивирована")
+		}
 		if verifyPassword(password, cached.PasswordHash) {
 			tokenStr, err := s.jwt.GenerateAccessToken(cached.ID, cached.Email, cached.FullName, cached.Role)
 			if err != nil {
@@ -148,6 +154,13 @@ func (s *AuthService) Login(ctx context.Context, login, password string) (string
 	user, err := s.repo.FindByLoginOrEmail(ctx, login)
 	if err != nil {
 		return "", nil, fmt.Errorf("неверный логин или пароль")
+	}
+
+	if user.IsDeleted {
+		return "", nil, fmt.Errorf("учётная запись удалена")
+	}
+	if !user.IsActive {
+		return "", nil, fmt.Errorf("учётная запись деактивирована")
 	}
 
 	if !verifyPassword(password, user.PasswordHash) {
@@ -248,6 +261,10 @@ func (s *AuthService) UpdateUser(ctx context.Context, id, login, email, fullName
 
 func (s *AuthService) ListUsers(ctx context.Context) ([]*model.User, error) {
 	return s.repo.ListAll(ctx)
+}
+
+func (s *AuthService) ListDeletedUsers(ctx context.Context) ([]*model.User, error) {
+	return s.repo.ListDeleted(ctx)
 }
 
 func (s *AuthService) SetUserStatus(ctx context.Context, id string, isActive bool, performedById string) (*model.User, error) {
