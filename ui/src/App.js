@@ -39,6 +39,7 @@ function App() {
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState({});
   const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [rescheduleMode, setRescheduleMode] = useState(null); // interview ID or null
   const [editingInterviewId, setEditingInterviewId] = useState(null);
   const [editInterviewData, setEditInterviewData] = useState({});
   const [selectedInterview, setSelectedInterview] = useState(null);
@@ -670,7 +671,16 @@ function App() {
     // Фильтр по опыту
     const expArr = Array.isArray(experienceFilter) ? experienceFilter : [];
     if (expArr.length > 0) {
-      filtered = filtered.filter(c => c.experience && expArr.includes(c.experience));
+      filtered = filtered.filter(c => {
+        const exp = c.experience;
+        if (expArr.includes('Без опыта') && (!exp || exp === 'Без опыта')) return true;
+        const n = parseInt(exp, 10);
+        if (isNaN(n)) return false;
+        if (expArr.includes('1-2 года') && n >= 1 && n <= 2) return true;
+        if (expArr.includes('3-5 лет') && n >= 3 && n <= 5) return true;
+        if (expArr.includes('5+ лет') && n >= 5) return true;
+        return false;
+      });
     }
     switch (sortOption) {
       case 'oldest':
@@ -808,11 +818,53 @@ function App() {
     }
   };
 
+  const handleReschedule = (interviewId) => {
+    setRescheduleMode(interviewId);
+    const interview = interviews.find(i => i.id === interviewId);
+    if (!interview) return;
+    setEditInterviewData({
+      date: interview.date || '',
+      time: interview.time || '',
+      interviewer: interview.interviewerId || '',
+      vacancyId: interview.vacancyId || '',
+    });
+  };
+
+  const handleRescheduleSubmit = async () => {
+    try {
+      const interview = interviews.find(i => i.id === rescheduleMode);
+      if (!interview) return;
+      const plannedDate = new Date(`${editInterviewData.date}T${editInterviewData.time || '00:00'}`).toISOString();
+      await api.updateInterview(rescheduleMode, {
+        candidateId: interview.candidateId,
+        vacancyId: editInterviewData.vacancyId || interview.vacancyId,
+        interviewerId: editInterviewData.interviewer,
+        plannedDate: plannedDate,
+        comments: '',
+      });
+      await api.updateInterviewStatus(rescheduleMode, { status: 'Planned', comments: '', decision: 'Pending' });
+      // Reset matrix scores
+      if (interview.matrix && interview.matrix.length > 0) {
+        const emptyItems = interview.matrix.map(m => ({ competencyId: m.competencyId, score: 0, comment: '' }));
+        try { await api.upsertMatrix(rescheduleMode, { items: emptyItems }); } catch {}
+      }
+      setRescheduleMode(null);
+      setEditInterviewData({});
+      // Reload
+      const interviewsRes = await api.getInterviews().catch(() => []);
+      const updated = (interviewsRes || []).map(mapInterviewFromApi);
+      setInterviews(updated);
+      const fresh = updated.find(i => i.id === rescheduleMode);
+      if (fresh) setSelectedInterview(fresh);
+    } catch (err) {
+      alert('Ошибка: ' + err.message);
+    }
+  };
+
   const handleScheduleSubmit = async (e) => {
     e.preventDefault();
     try {
       const plannedDate = new Date(`${newInterview.date}T${newInterview.time || '00:00'}`).toISOString();
-
       const dto = {
         candidateId: newInterview.candidateId,
         vacancyId: newInterview.vacancyId,
@@ -820,7 +872,6 @@ function App() {
         plannedDate: plannedDate,
         comments: '',
       };
-
       const created = await api.createInterview(dto);
       setInterviews([mapInterviewFromApi(created), ...interviews]);
       setNewInterview({ candidateId: '', vacancyId: '', interviewer: '', date: '', time: '' });
@@ -1077,6 +1128,7 @@ function App() {
     setIsEditing(false);
     setShowAddModal(false);
     setShowScheduleModal(false);
+    setRescheduleMode(null);
     setShowVacancyModal(false);
     setShowCompetencyModal(false);
     setShowUserModal(false);
@@ -1190,6 +1242,23 @@ function App() {
   }
 
   // --- КАРТОЧКА КАНДИДАТА ---
+  const getExperienceLabel = (val) => {
+    if (!val || val === 'Без опыта') return '';
+    const n = parseInt(val, 10);
+    if (isNaN(n)) return '';
+    if (n === 1) return 'год';
+    if (n >= 2 && n <= 4) return 'года';
+    return 'лет';
+  };
+
+  const getExpDisplay = (experience) => {
+    if (!experience) return 'Не указано';
+    if (experience === 'Без опыта') return 'Без опыта';
+    const n = parseInt(experience, 10);
+    if (isNaN(n)) return experience;
+    return `${n} ${getExperienceLabel(n)}`;
+  };
+
   const renderCandidateCard = () => {
     if (!selectedCandidate) return null;
     const getDisplayValue = (value) => value || 'Не указано';
@@ -1244,9 +1313,9 @@ function App() {
           </div>
         </div>
         <div style={{ background: '#171D24', padding: '24px 28px', borderRadius: '12px', marginBottom: '24px' }}>
-          <div style={{ display: 'flex', padding: '10px 0', borderBottom: '1px solid #2A3344' }}><span style={{ fontSize: '14px', color: '#6A7787', minWidth: '180px' }}>Номер телефона:</span>{isEditing ? <input type="tel" value={formatPhoneForEdit(editData.phone)} onChange={(e) => { const value = e.target.value.replace(/\D/g, ''); if (value.length <= 11) handleEditChange('phone', value); }} onFocus={(e) => { if (!editData.phone) handleEditChange('phone', '7'); }} placeholder="+7 (___) ___-__-__" style={{ background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', padding: '4px 12px', fontSize: '14px', outline: 'none', width: '100%', maxWidth: '200px', flex: 1, boxSizing: 'border-box' }} maxLength="18" /> : <span style={{ fontSize: '14px', color: '#ffffff', flex: 1 }}>{formatPhone(selectedCandidate.phone)}</span>}</div>
+          <div style={{ display: 'flex', padding: '10px 0', borderBottom: '1px solid #2A3344' }}><span style={{ fontSize: '14px', color: '#6A7787', minWidth: '180px' }}>Номер телефона:</span>{isEditing ? <input type="tel" value={formatPhoneForEdit(editData.phone)} onChange={(e) => { let val = e.target.value.replace(/\D/g, ''); if (!val.startsWith('7') && val.length > 0) val = '7' + val; if (val.length > 11) val = val.slice(0, 11); handleEditChange('phone', val); }} onFocus={(e) => { if (!editData.phone) handleEditChange('phone', '7'); }} placeholder="+7 (___) ___-__-__" style={{ background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', padding: '4px 12px', fontSize: '14px', outline: 'none', width: '100%', maxWidth: '200px', flex: 1, boxSizing: 'border-box' }} /> : <span style={{ fontSize: '14px', color: '#ffffff', flex: 1 }}>{formatPhone(selectedCandidate.phone)}</span>}</div>
           <div style={{ display: 'flex', padding: '10px 0', borderBottom: '1px solid #2A3344' }}><span style={{ fontSize: '14px', color: '#6A7787', minWidth: '180px' }}>Город:</span>{isEditing ? <input type="text" value={editData.city} onChange={(e) => handleEditChange('city', e.target.value)} style={{ background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', padding: '4px 12px', fontSize: '14px', outline: 'none', width: '100%', maxWidth: '200px', flex: 1, boxSizing: 'border-box' }} /> : <span style={{ fontSize: '14px', color: '#ffffff', flex: 1 }}>{getDisplayValue(selectedCandidate.city)}</span>}</div>
-          <div style={{ display: 'flex', padding: '10px 0', borderBottom: '1px solid #2A3344' }}><span style={{ fontSize: '14px', color: '#6A7787', minWidth: '180px' }}>Опыт работы:</span>{isEditing ? <input type="text" value={editData.experience} onChange={(e) => handleEditChange('experience', e.target.value)} placeholder="Например: 3 года в backend" style={{ background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', padding: '4px 12px', fontSize: '14px', outline: 'none', width: '100%', maxWidth: '200px', flex: 1, boxSizing: 'border-box' }} /> : <span style={{ fontSize: '14px', color: '#ffffff', flex: 1 }}>{getDisplayValue(selectedCandidate.experience)}</span>}</div>
+          <div style={{ display: 'flex', padding: '10px 0', borderBottom: '1px solid #2A3344' }}><span style={{ fontSize: '14px', color: '#6A7787', minWidth: '180px' }}>Опыт работы:</span>{isEditing ? <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, maxWidth: '250px' }}><input type="number" min="0" max="50" value={editData.experience === 'Без опыта' ? '' : (editData.experience || '')} onChange={(e) => { const v = e.target.value; if (v === '' || (/^\d+$/.test(v) && parseInt(v) <= 50)) handleEditChange('experience', v); }} placeholder="Лет" style={{ background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', padding: '4px 12px', fontSize: '14px', outline: 'none', width: '60px', boxSizing: 'border-box' }} /><span style={{ fontSize: '13px', color: '#6A7787' }}>{editData.experience === 'Без опыта' ? '' : getExperienceLabel(editData.experience)}</span><button type="button" onClick={() => handleEditChange('experience', editData.experience === 'Без опыта' ? '' : 'Без опыта')} style={{ padding: '4px 8px', background: editData.experience === 'Без опыта' ? '#333F50' : 'transparent', border: '1px solid #6A7787', borderRadius: '6px', color: '#ffffff', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap' }}>Без опыта</button></div> : <span style={{ fontSize: '14px', color: '#ffffff', flex: 1 }}>{getExpDisplay(selectedCandidate.experience)}</span>}</div>
           <div style={{ display: 'flex', padding: '10px 0', borderBottom: '1px solid #2A3344' }}><span style={{ fontSize: '14px', color: '#6A7787', minWidth: '180px' }}>Образование:</span>{isEditing ? <input type="text" value={editData.education} onChange={(e) => handleEditChange('education', e.target.value)} style={{ background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', padding: '4px 12px', fontSize: '14px', outline: 'none', width: '100%', maxWidth: '200px', flex: 1, boxSizing: 'border-box' }} /> : <span style={{ fontSize: '14px', color: '#ffffff', flex: 1 }}>{getDisplayValue(selectedCandidate.education)}</span>}</div>
           <div style={{ display: 'flex', padding: '10px 0', borderBottom: '1px solid #2A3344' }}><span style={{ fontSize: '14px', color: '#6A7787', minWidth: '180px' }}>Пред. место работы:</span>{isEditing ? <input type="text" value={editData.previousJob} onChange={(e) => handleEditChange('previousJob', e.target.value)} style={{ background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', padding: '4px 12px', fontSize: '14px', outline: 'none', width: '100%', maxWidth: '200px', flex: 1, boxSizing: 'border-box' }} /> : <span style={{ fontSize: '14px', color: '#ffffff', flex: 1, wordBreak: 'break-word' }}>{getDisplayValue(selectedCandidate.previousJob)}</span>}</div>
         </div>
@@ -1294,7 +1363,7 @@ function App() {
             <div style={{ marginBottom: '14px' }}><label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Номер телефона *</label><input type="tel" value={(() => { const p = newCandidate.phone; if (!p || p.length === 0) return ''; if (p.length <= 1) return '+' + p; if (p.length <= 4) return '+' + p.slice(0,1) + ' (' + p.slice(1); if (p.length <= 7) return '+' + p.slice(0,1) + ' (' + p.slice(1,4) + ') ' + p.slice(4); return '+' + p.slice(0,1) + ' (' + p.slice(1,4) + ') ' + p.slice(4,7) + '-' + p.slice(7,9) + '-' + p.slice(9); })()} onChange={(e) => { let val = e.target.value.replace(/\D/g, ''); if (!val.startsWith('7') && val.length > 0) val = '7' + val; if (val.length > 11) val = val.slice(0, 11); setNewCandidate({ ...newCandidate, phone: val }); setPhoneError(''); }} onFocus={(e) => { if (!newCandidate.phone) { setNewCandidate({ ...newCandidate, phone: '7' }); } }} placeholder="+7 (___) ___-__-__" style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} required maxLength="18" />{phoneError && <p style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }}>{phoneError}</p>}</div>
             <div style={{ marginBottom: '14px' }}><label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Город *</label><input type="text" value={newCandidate.city} onChange={(e) => setNewCandidate({ ...newCandidate, city: e.target.value })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} required /></div>
             <div style={{ marginBottom: '14px' }}><label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Образование *</label><input type="text" value={newCandidate.education} onChange={(e) => setNewCandidate({ ...newCandidate, education: e.target.value })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} required /></div>
-            <div style={{ marginBottom: '14px' }}><label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Опыт работы *</label><select value={newCandidate.experience} onChange={(e) => setNewCandidate({ ...newCandidate, experience: e.target.value, previousJob: (e.target.value === 'Без опыта') ? '' : newCandidate.previousJob })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} required><option value="">Выберите уровень</option><option value="Без опыта">Без опыта</option><option value="Junior (0-1 год)">Junior (0-1 год)</option><option value="Middle (2-4 года)">Middle (2-4 года)</option><option value="Senior (5+ лет)">Senior (5+ лет)</option></select></div>
+            <div style={{ marginBottom: '14px' }}><label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Опыт работы *</label><div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><input type="number" min="0" max="50" value={newCandidate.experience === 'Без опыта' ? '' : (newCandidate.experience || '')} onChange={(e) => { const v = e.target.value; if (v === '' || (/^\d+$/.test(v) && parseInt(v) <= 50)) setNewCandidate({ ...newCandidate, experience: v }); }} placeholder="Лет" style={{ width: '70px', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} required={!newCandidate.experience} /><span style={{ fontSize: '13px', color: '#6A7787' }}>{newCandidate.experience === 'Без опыта' ? '' : getExperienceLabel(newCandidate.experience)}</span><button type="button" onClick={() => setNewCandidate({ ...newCandidate, experience: newCandidate.experience === 'Без опыта' ? '' : 'Без опыта', previousJob: newCandidate.experience === 'Без опыта' ? newCandidate.previousJob : '' })} style={{ padding: '6px 12px', background: newCandidate.experience === 'Без опыта' ? '#333F50' : 'transparent', border: '1px solid #6A7787', borderRadius: '6px', color: '#ffffff', fontSize: '12px', cursor: 'pointer', whiteSpace: 'nowrap' }}>Без опыта</button></div></div>
             {newCandidate.experience && newCandidate.experience !== 'Без опыта' && <div style={{ marginBottom: '14px' }}><label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Предыдущее место работы *</label><input type="text" value={newCandidate.previousJob} onChange={(e) => setNewCandidate({ ...newCandidate, previousJob: e.target.value })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} required /></div>}
             <div style={{ marginBottom: '20px' }}><label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Навыки (через запятую)</label><input type="text" value={newCandidate.skills} onChange={(e) => setNewCandidate({ ...newCandidate, skills: e.target.value })} placeholder="Например: Python, SQL, Java" style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} /></div>
             <div style={{ display: 'flex', gap: '12px' }}><button type="button" onClick={() => setShowAddModal(false)} style={{ flex: 1, padding: '10px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Отмена</button><button type="submit" style={{ flex: 1, padding: '10px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Добавить</button></div>
@@ -1308,18 +1377,18 @@ function App() {
   const renderScheduleModal = () => {
     if (!showScheduleModal) return null;
     return (
-      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }} onClick={() => setShowScheduleModal(false)}>
+      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }} onClick={() => { setShowScheduleModal(false); }}>
         <div style={{ background: '#171D24', padding: '32px', borderRadius: '16px', maxWidth: '500px', width: '100%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }} onClick={(e) => e.stopPropagation()}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-            <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#ffffff' }}>Запланировать собеседование</h2>
-            <button onClick={() => setShowScheduleModal(false)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#6A7787', transition: 'color 0.2s' }} onMouseEnter={(e) => e.target.style.color = '#ffffff'} onMouseLeave={(e) => e.target.style.color = '#6A7787'}>✕</button>
+            <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#ffffff' }}>{rescheduleMode ? 'Перенести собеседование' : 'Запланировать собеседование'}</h2>
+            <button onClick={() => { setShowScheduleModal(false); }} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#6A7787', transition: 'color 0.2s' }} onMouseEnter={(e) => e.target.style.color = '#ffffff'} onMouseLeave={(e) => e.target.style.color = '#6A7787'}>✕</button>
           </div>
           <form onSubmit={handleScheduleSubmit}>
             <div style={{ marginBottom: '14px' }}><label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Кандидат *</label><select value={newInterview.candidateId} onChange={(e) => setNewInterview({ ...newInterview, candidateId: e.target.value })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} required><option value="">Выберите кандидата</option>{candidates.filter(c => !c.isArchived).map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}</select></div>
             <div style={{ marginBottom: '14px' }}><label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Вакансия *</label><select value={newInterview.vacancyId || ''} onChange={(e) => setNewInterview({ ...newInterview, vacancyId: e.target.value })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} required><option value="">Выберите вакансию</option>{vacanciesList.filter(v => !v.isArchived).map((vacancy) => <option key={vacancy.id} value={vacancy.id}>{vacancy.title}</option>)}</select></div>
             <div style={{ marginBottom: '14px' }}><label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Интервьюер *</label><select value={newInterview.interviewer} onChange={(e) => setNewInterview({ ...newInterview, interviewer: e.target.value })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} required><option value="">Выберите интервьюера</option>{users.filter(u => u.role === 'hr').map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select></div>
             <div style={{ display: 'flex', gap: '12px' }}><div style={{ flex: 1, marginBottom: '14px' }}><label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Дата *</label><input type="date" value={newInterview.date} onChange={(e) => setNewInterview({ ...newInterview, date: e.target.value })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} required /></div><div style={{ flex: 1, marginBottom: '14px' }}><label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Время *</label><input type="time" value={newInterview.time} onChange={(e) => setNewInterview({ ...newInterview, time: e.target.value })} style={{ width: '100%', padding: '10px 14px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} required /></div></div>
-            <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}><button type="button" onClick={() => setShowScheduleModal(false)} style={{ flex: 1, padding: '10px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Отмена</button><button type="submit" style={{ flex: 1, padding: '10px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Запланировать</button></div>
+            <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}><button type="button" onClick={() => { setShowScheduleModal(false); }} style={{ flex: 1, padding: '10px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Отмена</button><button type="submit" style={{ flex: 1, padding: '10px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>{rescheduleMode ? 'Перенести' : 'Запланировать'}</button></div>
           </form>
         </div>
       </div>
@@ -1431,7 +1500,14 @@ function App() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #2A3344', paddingBottom: '8px' }}><span style={{ color: '#6A7787' }}>Интервьюер:</span><span style={{ color: '#ffffff' }}>{selectedInterview.interviewer}</span></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #2A3344', paddingBottom: '8px' }}><span style={{ color: '#6A7787' }}>Дата:</span><span style={{ color: '#ffffff' }}>{formatDateTime(selectedInterview.date + 'T' + selectedInterview.time)}</span></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #2A3344', paddingBottom: '8px' }}><span style={{ color: '#6A7787' }}>Статус:</span><span style={{ padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '600', color: '#ffffff', display: 'inline-block', background: getStatusColor(selectedInterview.status) }}>{selectedInterview.status}</span></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#6A7787' }}>Решение:</span><span style={{ color: '#ffffff' }}>{selectedInterview.decision || '—'}</span></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={{ color: '#6A7787' }}>Решение:</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ color: '#ffffff' }}>{selectedInterview.decision || '—'}</span>
+                    {selectedInterview.decision === 'Следующий этап' && hasPermission('interviews.edit') && rescheduleMode !== selectedInterview.id && (
+                      <button onClick={() => handleReschedule(selectedInterview.id)} style={{ padding: '4px 12px', background: '#025461', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#036c7a'} onMouseLeave={(e) => e.target.style.background = '#025461'}>Перенести</button>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
             <div style={{ background: '#171D24', padding: '24px', borderRadius: '12px', marginBottom: '24px' }}>
@@ -1445,8 +1521,43 @@ function App() {
               {skills.map((skill, index) => (<div key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: index < skills.length - 1 ? '1px solid #2A3344' : 'none' }}><span style={{ fontSize: '14px', color: '#ffffff', flex: 1 }}>{skill}</span><div style={{ display: 'flex', gap: '4px' }}>{renderStars(index)}</div></div>))}
             </div>
             <div style={{ background: '#171D24', padding: '24px', borderRadius: '12px' }}>
-              <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#ffffff', marginBottom: '16px' }}>Действия</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#ffffff', marginBottom: '16px' }}>{rescheduleMode === selectedInterview.id ? 'Перенести собеседование' : 'Действия'}</h3>
+              {rescheduleMode === selectedInterview.id ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ padding: '8px 12px', background: '#11171F', borderRadius: '8px', fontSize: '13px', color: '#6A7787' }}>
+                    Кандидат: <span style={{ color: '#ffffff' }}>{selectedInterview.candidateName}</span> (не изменяется)
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Вакансия</label>
+                    <select value={editInterviewData.vacancyId || ''} onChange={(e) => setEditInterviewData({ ...editInterviewData, vacancyId: e.target.value })} style={{ width: '100%', padding: '8px 12px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}>
+                      <option value="">Выберите вакансию</option>
+                      {vacanciesList.filter(v => !v.isArchived).map(v => <option key={v.id} value={v.id}>{v.title}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Интервьюер</label>
+                    <select value={editInterviewData.interviewer || ''} onChange={(e) => setEditInterviewData({ ...editInterviewData, interviewer: e.target.value })} style={{ width: '100%', padding: '8px 12px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}>
+                      <option value="">Выберите интервьюера</option>
+                      {users.filter(u => u.role === 'hr').map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                    </select>
+                  </div>
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Дата</label>
+                      <input type="date" value={editInterviewData.date || ''} onChange={(e) => setEditInterviewData({ ...editInterviewData, date: e.target.value })} style={{ width: '100%', padding: '8px 12px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ fontSize: '12px', color: '#6A7787', display: 'block', marginBottom: '4px' }}>Время</label>
+                      <input type="time" value={editInterviewData.time || ''} onChange={(e) => setEditInterviewData({ ...editInterviewData, time: e.target.value })} style={{ width: '100%', padding: '8px 12px', background: '#11171F', border: '1px solid #6A7787', borderRadius: '8px', color: '#ffffff', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                    <button onClick={() => { setRescheduleMode(null); setEditInterviewData({}); }} style={{ flex: 1, padding: '8px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Отмена</button>
+                    <button onClick={handleRescheduleSubmit} style={{ flex: 1, padding: '8px', background: '#025461', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={(e) => e.target.style.background = '#036c7a'} onMouseLeave={(e) => e.target.style.background = '#025461'}>Подтвердить перенос</button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {/* Завершить / Отменить — только для Запланировано */}
                 {selectedInterview.status === 'Запланировано' && hasPermission('interviews.edit') && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -1466,7 +1577,7 @@ function App() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <button onClick={() => handleDecision(selectedInterview.id, 'Принят')} style={{ padding: '10px 16px', background: '#3E503A', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s', fontFamily: "'Unbounded', sans-serif", textAlign: 'left' }} onMouseEnter={(e) => e.target.style.background = '#4A6A4A'} onMouseLeave={(e) => e.target.style.background = '#3E503A'}>Нанять</button>
                     <button onClick={() => handleDecision(selectedInterview.id, 'Отказан')} style={{ padding: '10px 16px', background: '#4E1717', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s', fontFamily: "'Unbounded', sans-serif", textAlign: 'left' }} onMouseEnter={(e) => e.target.style.background = '#6E2727'} onMouseLeave={(e) => e.target.style.background = '#4E1717'}>Отклонить</button>
-                    <button onClick={() => handleDecision(selectedInterview.id, 'Следующий этап')} style={{ padding: '10px 16px', background: '#0891b2', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s', fontFamily: "'Unbounded', sans-serif", textAlign: 'left' }} onMouseEnter={(e) => e.target.style.background = '#06b6d4'} onMouseLeave={(e) => e.target.style.background = '#0891b2'}>Следующий этап</button>
+                    <button onClick={() => handleDecision(selectedInterview.id, 'Следующий этап')} style={{ padding: '10px 16px', background: '#025461', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s', fontFamily: "'Unbounded', sans-serif", textAlign: 'left' }} onMouseEnter={(e) => e.target.style.background = '#036c7a'} onMouseLeave={(e) => e.target.style.background = '#025461'}>Следующий этап</button>
                     <button onClick={() => handleDecision(selectedInterview.id, 'Кадровый резерв')} style={{ padding: '10px 16px', background: '#854d0e', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s', fontFamily: "'Unbounded', sans-serif", textAlign: 'left' }} onMouseEnter={(e) => e.target.style.background = '#a16207'} onMouseLeave={(e) => e.target.style.background = '#854d0e'}>Кадровый резерв</button>
                   </div>
                 )}
@@ -1479,6 +1590,7 @@ function App() {
                 <button onClick={() => pdfGenerate('Протокол собеседования', selectedInterview)} style={{ padding: '10px 16px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s', fontFamily: "'Unbounded', sans-serif", textAlign: 'left' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Скачать протокол собеседования</button>
                 <button onClick={() => pdfGenerate('Письмо о решении', selectedInterview)} style={{ padding: '10px 16px', background: '#333F50', color: '#ffffff', border: 'none', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s', fontFamily: "'Unbounded', sans-serif", textAlign: 'left' }} onMouseEnter={(e) => e.target.style.background = '#4A5A70'} onMouseLeave={(e) => e.target.style.background = '#333F50'}>Скачать письмо о решении</button>
               </div>
+              )}
             </div>
           </div>
         </div>
@@ -1601,7 +1713,7 @@ function App() {
     'Ожидает собеседования': { bg: '#7F7B6D', text: '#ffffff' },
     'Ожидает решения': { bg: '#0891b2', text: '#ffffff' },
     'Нанят': { bg: '#065f46', text: '#ffffff' },
-    'В кадровом резерве': { bg: '#1d4ed8', text: '#ffffff' },
+    'В кадровом резерве': { bg: '#fed7aa', text: '#9a3412' },
     'Отклонён': { bg: '#4E1717', text: '#ffffff' },
   };
 
@@ -1623,7 +1735,7 @@ function App() {
           placeholder="Поиск по имени, телефону, вакансии..."
           filters={[
             { key: 'candidateStatus', type: 'select', label: 'Статус', options: ['Активен', 'Ожидает собеседования', 'Ожидает решения', 'Нанят', 'В кадровом резерве', 'Отклонён'] },
-            { key: 'experience', type: 'select', label: 'Опыт работы', options: ['Junior (0-1 год)', 'Middle (2-4 года)', 'Senior (5+ лет)'] },
+            { key: 'experience', type: 'select', label: 'Опыт работы', options: ['Без опыта', '1-2 года', '3-5 лет', '5+ лет'] },
             { key: 'sort', type: 'sort', label: 'Сортировка', options: [
               { value: 'newest', label: 'Сначала новые' },
               { value: 'oldest', label: 'Сначала старые' },

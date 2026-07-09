@@ -349,7 +349,6 @@ export function mapAuditFromApi(dto) {
     Decide: 'Решение',
     UpsertMatrix: 'Обновление матрицы',
     Restore: 'Восстановление',
-    SetStatus: 'Изменение статуса',
   };
   return {
     id: dto.id,

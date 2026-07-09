@@ -1032,7 +1032,7 @@ public sealed class InterviewService(IUnitOfWork unitOfWork, IAuditService audit
         interview.DeletedReason = reason;
 
         unitOfWork.Interviews.Update(interview);
-        await auditService.LogAsync("Interview", id, "Delete", null, new { interview.IsDeleted }, performedById, cancellationToken);
+        await auditService.LogAsync("Interview", id, "SoftDelete", null, new { interview.IsDeleted }, performedById, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
