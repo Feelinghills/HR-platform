@@ -311,11 +311,9 @@ public sealed class QuestPdfService : IPdfService
             container.Page(page =>
             {
                 page.Size(PageSizes.A4);
-                page.MarginLeft(PdfStyles.MarginLeft);
-                page.MarginRight(PdfStyles.MarginRight);
-                page.MarginTop(PdfStyles.MarginTop);
-                page.MarginBottom(PdfStyles.MarginBottom);
-                page.DefaultTextStyle(x => x.FontFamily("Times New Roman").FontSize(12));
+                page.Margin(2, Unit.Centimetre);
+                page.PageColor(Colors.White);
+                page.DefaultTextStyle(x => x.FontFamily("Arial").FontSize(11).LineHeight(1.4f));
 
                 page.Header().Column(column =>
                 {
@@ -324,35 +322,28 @@ public sealed class QuestPdfService : IPdfService
                         row.RelativeItem().Width(120).Column(logoCol =>
                         {
                             if (logoBytes.Length > 0)
-                                logoCol.Item().Image(logoBytes).FitArea();
+                                logoCol.Item().Image(logoBytes);
                         });
-                        row.RelativeItem().AlignCenter().AlignMiddle()
-                            .Text(document.Title).SemiBold().FontSize(18);
-                        row.RelativeItem();
+                        row.ConstantItem(240).AlignRight().Column(infoCol =>
+                        {
+                            infoCol.Item().Text(document.Title).Bold().FontSize(12);
+                            if (!string.IsNullOrEmpty(document.DocumentNumber) || !string.IsNullOrEmpty(document.DocumentDate))
+                            {
+                                var trackingText = $"{document.DocumentNumber}\n{document.DocumentDate}";
+                                infoCol.Item().Text(trackingText).FontSize(9).FontColor(Colors.Grey.Darken2);
+                            }
+                        });
                     });
-                    column.Item().PaddingTop(6).LineHorizontal(1).LineColor(Colors.Black);
+                    column.Item().PaddingTop(0.5f, Unit.Centimetre);
                 });
 
-                page.Content().PaddingVertical(16).Column(column =>
+                page.Content().PaddingTop(1, Unit.Centimetre).Column(column =>
                 {
-                    column.Spacing(8);
-
-                    if (!string.IsNullOrEmpty(document.DocumentNumber) || !string.IsNullOrEmpty(document.DocumentDate))
+                    if (!string.IsNullOrEmpty(document.Subtitle))
                     {
-                        column.Item().AlignRight().Column(r =>
-                        {
-                            if (!string.IsNullOrEmpty(document.DocumentNumber))
-                                r.Item().Text(document.DocumentNumber).FontSize(11);
-                            if (!string.IsNullOrEmpty(document.DocumentDate))
-                                r.Item().Text(document.DocumentDate).FontSize(11);
-                        });
+                        column.Item().AlignCenter().Text(document.Subtitle).Bold().FontSize(16);
+                        column.Item().PaddingTop(0.8f, Unit.Centimetre);
                     }
-
-                    column.Item().PaddingTop(6).AlignCenter()
-                        .Text(document.Subtitle).SemiBold().FontSize(16);
-
-                    column.Item().PaddingTop(6).LineHorizontal(1).LineColor(Colors.Black);
-                    column.Item().PaddingTop(8);
 
                     foreach (var section in document.Sections)
                     {
@@ -363,49 +354,50 @@ public sealed class QuestPdfService : IPdfService
 
                         if (textLines.Count > 0)
                         {
-                            if (isBoxed)
+                            if (sectionTitle == "Дата/подпись:")
                             {
-                                column.Item().PaddingTop(8).Border(0.5f).BorderColor(Colors.Grey.Medium).Padding(12).Column(boxCol =>
+                                column.Item().PaddingTop(1f, Unit.Centimetre)
+                                    .Text("Дата/подпись: __________________").FontSize(11);
+                            }
+                            else if (!string.IsNullOrEmpty(sectionTitle))
+                            {
+                                column.Item().Text(sectionTitle).Bold().FontSize(13);
+                                column.Item().PaddingTop(0.3f, Unit.Centimetre).BorderBottom(1).BorderColor(Colors.Grey.Lighten2);
+                            }
+
+                            if (sectionTitle != "Дата/подпись:")
+                            {
+                                column.Item().PaddingVertical(0.4f, Unit.Centimetre).Column(textCol =>
                                 {
-                                    boxCol.Item().Text(sectionTitle).SemiBold().FontSize(13);
                                     foreach (var line in textLines)
                                     {
-                                        boxCol.Item().PaddingTop(2).Text(line).FontSize(12);
+                                        if (line == "---")
+                                        {
+                                            // skip
+                                        }
+                                        else if (line.StartsWith("___"))
+                                        {
+                                            textCol.Item().PaddingTop(0.5f, Unit.Centimetre).Width(200).LineHorizontal(0.5f).LineColor(Colors.Black);
+                                        }
+                                        else
+                                        {
+                                            textCol.Item().PaddingTop(2).Text(line).FontSize(11);
+                                        }
                                     }
                                 });
-                            }
-                            else
-                            {
-                                column.Item().PaddingTop(8)
-                                    .Text(sectionTitle).SemiBold().FontSize(13);
-                                foreach (var line in textLines)
-                                {
-                                    if (line == "---")
-                                    {
-                                        column.Item().PaddingTop(6).LineHorizontal(0.5f).LineColor(Colors.Black);
-                                    }
-                                    else if (line.StartsWith("___"))
-                                    {
-                                        column.Item().PaddingTop(4).Width(200).LineHorizontal(0.5f).LineColor(Colors.Black);
-                                    }
-                                    else
-                                    {
-                                        column.Item().PaddingTop(2).Text(line).FontSize(12);
-                                    }
-                                }
                             }
                         }
 
                         if (tableLines.Count > 0)
                         {
-                            if (textLines.Count == 0)
+                            if (textLines.Count == 0 && !string.IsNullOrEmpty(section.Title))
                             {
-                                column.Item().PaddingTop(8)
-                                    .Text(section.Title).SemiBold().FontSize(13);
+                                column.Item().Text(section.Title).Bold().FontSize(13);
+                                column.Item().PaddingTop(0.3f, Unit.Centimetre).BorderBottom(1).BorderColor(Colors.Grey.Lighten2);
                             }
 
                             var headers = tableLines[0].Split(" | ");
-                            column.Item().PaddingTop(4).Table(table =>
+                            column.Item().PaddingTop(0.4f, Unit.Centimetre).Table(table =>
                             {
                                 table.ColumnsDefinition(columns =>
                                 {
@@ -417,19 +409,20 @@ public sealed class QuestPdfService : IPdfService
                                 {
                                     foreach (var h in headers)
                                     {
-                                        header.Cell().Background(Colors.Grey.Lighten3).Border(0.5f)
-                                            .BorderColor(Colors.Grey.Medium).Padding(5)
-                                            .Text(h).SemiBold().FontSize(11);
+                                        header.Cell().Background(Colors.Grey.Lighten3)
+                                            .PaddingHorizontal(6).PaddingVertical(5)
+                                            .Text(h).Bold().FontSize(10);
                                     }
                                 });
 
-                                for (int row = 1; row < tableLines.Count; row++)
+                                for (int rowIndex = 1; rowIndex < tableLines.Count; rowIndex++)
                                 {
-                                    var cells = tableLines[row].Split(" | ");
+                                    var cells = tableLines[rowIndex].Split(" | ");
                                     foreach (var cell in cells)
                                     {
-                                        table.Cell().Border(0.5f).BorderColor(Colors.Grey.Medium)
-                                            .Padding(5).Text(cell).FontSize(11);
+                                        table.Cell().BorderBottom(0.5f).BorderColor(Colors.Grey.Lighten2)
+                                            .PaddingHorizontal(6).PaddingVertical(5)
+                                            .Text(cell.Trim()).FontSize(10);
                                     }
                                 }
                             });
@@ -437,12 +430,12 @@ public sealed class QuestPdfService : IPdfService
                     }
                 });
 
-                page.Footer().AlignCenter().Text(text =>
+                page.Footer().PaddingTop(1f, Unit.Centimetre).AlignCenter().Text(text =>
                 {
-                    text.Span("Страница ");
-                    text.CurrentPageNumber();
-                    text.Span(" из ");
-                    text.TotalPages();
+                    text.Span("Страница ").FontSize(10).FontColor(Colors.Grey.Darken1);
+                    text.CurrentPageNumber().FontSize(10).FontColor(Colors.Grey.Darken1);
+                    text.Span(" из ").FontSize(10).FontColor(Colors.Grey.Darken1);
+                    text.TotalPages().FontSize(10).FontColor(Colors.Grey.Darken1);
                 });
             });
         }).GeneratePdf();

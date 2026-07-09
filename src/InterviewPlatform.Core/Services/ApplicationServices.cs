@@ -1150,7 +1150,7 @@ public sealed class ReportService(IUnitOfWork unitOfWork, IPdfService pdfService
             .Select(x => $"{x.PlannedDate:dd.MM.yyyy HH:mm} | {x.VacancyTitle} | {DecisionText(x.Decision)} | {StatusText(x.Status)}"));
 
         var cardNumber = $"№ KK-{candidateId.ToString()[..8].ToUpper()}";
-        var documentDate = $"от {DateTime.Now:dd.MM.yyyy}";
+        var documentDate = $"от {DateTime.Now:dd.MM.yyyy} г.";
 
         var document = new ReportDocument(
             "Карточка кандидата",
@@ -1162,22 +1162,16 @@ public sealed class ReportService(IUnitOfWork unitOfWork, IPdfService pdfService
                 new("Контактная информация", new[]
                 {
                     $"Телефон: {FormatPhone(candidate.Phone)}",
-                    $"Email: {candidate.Email ?? "-"}",
-                    $"Город: {candidate.City}",
-                    $"Желаемая позиция: {candidate.DesiredPosition}"
+                    $"Город: {candidate.City}"
                 }),
-                new("Образование и опыт работы", new[]
+                new("О кандидате", new[]
                 {
-                    $"Навыки: {candidate.Skills}",
                     $"Образование: {candidate.Education}",
-                    $"Предыдущее место работы: {candidate.PreviousJob}"
+                    $"Предыдущее место работы: {candidate.PreviousJob}",
+                    $"Навыки: {candidate.Skills}"
                 }),
                 new("История собеседований", interviews.Count == 0 ? new[] { "Собеседования еще не заведены." } : interviews),
-                new("---", new[] { "" }),
-                new("Подпись руководителя:", new[] { "" }),
-                new("___", new[] { "" }),
-                new("Дата:", new[] { "" }),
-                new("___", new[] { "" })
+                new("Дата/подпись:", new[] { "__________________" })
             });
 
         return new GeneratedReport($"{FileName(candidate.FullName)}-candidate-card.pdf", await pdfService.GenerateAsync(document, cancellationToken));
@@ -1195,8 +1189,9 @@ public sealed class ReportService(IUnitOfWork unitOfWork, IPdfService pdfService
                 x.Comments,
                 CandidateName = x.Candidate == null ? string.Empty : x.Candidate.FullName,
                 VacancyTitle = x.Vacancy == null ? string.Empty : x.Vacancy.Title,
+                VacancyDescription = x.Vacancy == null ? string.Empty : x.Vacancy.Description,
+                VacancyRequirements = x.Vacancy == null ? string.Empty : x.Vacancy.Requirements,
                 InterviewerName = x.Interviewer == null ? string.Empty : x.Interviewer.FullName,
-                InterviewerRole = x.Interviewer == null ? string.Empty : x.Interviewer.Role.ToString(),
                 Matrix = x.Matrices
                     .OrderBy(m => m.Competency == null ? string.Empty : m.Competency.Category)
                     .ThenBy(m => m.Competency == null ? string.Empty : m.Competency.Name)
@@ -1220,15 +1215,21 @@ public sealed class ReportService(IUnitOfWork unitOfWork, IPdfService pdfService
                 .ToList();
 
         var protocolNumber = $"Протокол № PS-{interviewId.ToString()[..8].ToUpper()}";
-        var documentDate = $"от {interview.PlannedDate:dd.MM.yyyy}";
+        var documentDate = $"от {interview.PlannedDate:dd.MM.yyyy} г.";
 
         var document = new ReportDocument(
             "Протокол собеседования",
-            $"{interview.CandidateName} - {interview.VacancyTitle}",
+            interview.CandidateName,
             protocolNumber,
             documentDate,
             new List<ReportSection>
             {
+                new("Вакансия", new[]
+                {
+                    $"Название: {interview.VacancyTitle}",
+                    $"Описание: {interview.VacancyDescription}",
+                    $"Требования: {interview.VacancyRequirements}"
+                }),
                 new("Параметры собеседования", new[]
                 {
                     $"Дата и время: {interview.PlannedDate:dd.MM.yyyy HH:mm}",
@@ -1238,21 +1239,7 @@ public sealed class ReportService(IUnitOfWork unitOfWork, IPdfService pdfService
                     $"Комментарии: {interview.Comments ?? "-"}"
                 }),
                 new("Матрица компетенций", matrixLines),
-                new("---", new[] { "" }),
-                new("Интервьюер:", new[]
-                {
-                    interview.InterviewerName,
-                    interview.InterviewerRole switch
-                    {
-                        "Admin" => "Администратор",
-                        "HR" => "HR-специалист",
-                        "DecisionMaker" => "Руководитель",
-                        _ => "Интервьюер"
-                    }
-                }),
-                new("___", new[] { "" }),
-                new("Дата собеседования:", new[] { "" }),
-                new("___", new[] { "" })
+                new("Дата/подпись:", new[] { "__________________" })
             });
 
         return new GeneratedReport($"{FileName(interview.CandidateName)}-interview-protocol.pdf", await pdfService.GenerateAsync(document, cancellationToken));
@@ -1340,27 +1327,9 @@ public sealed class ReportService(IUnitOfWork unitOfWork, IPdfService pdfService
                 "• пройти медицинский осмотр (при необходимости);",
                 "• подписать трудовой договор в отделе кадров."
             }));
-            sections.Add(new("Завершение", new[]
-            {
-                "С нетерпением ждём Вас в нашей команде!"
-            }));
         }
 
-        sections.Add(new("---", new[] { "" }));
-        sections.Add(new("Интервьюер:", new[]
-        {
-            interview.InterviewerName,
-            interview.InterviewerRole switch
-            {
-                "Admin" => "Администратор",
-                "HR" => "HR-специалист",
-                "DecisionMaker" => "Руководитель",
-                _ => "Интервьюер"
-            }
-        }));
-        sections.Add(new("___", new[] { "" }));
-        sections.Add(new("Дата/подпись:", new[] { "" }));
-        sections.Add(new("___", new[] { "" }));
+        sections.Add(new("Дата/подпись:", new[] { "__________________" }));
 
         var document = new ReportDocument(
             title,
